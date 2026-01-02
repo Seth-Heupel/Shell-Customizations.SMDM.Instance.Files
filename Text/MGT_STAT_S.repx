@@ -1,0 +1,359 @@
+﻿/// <XRTypeInfo>
+///   <AssemblyFullName>DevExpress.XtraReports.v12.2, Version=12.2.6.0, Culture=neutral, PublicKeyToken=b88d1754d700e49a</AssemblyFullName>
+///   <AssemblyLocation>C:\Thermo\SampleManager\Server\SMDM\Exe\DevExpress.XtraReports.v12.2.dll</AssemblyLocation>
+///   <TypeName>DevExpress.XtraReports.UI.XtraReport</TypeName>
+///   <Localization>en-US</Localization>
+///   <Version>12.2</Version>
+/// </XRTypeInfo>
+namespace XtraReportSerialization {
+    
+    public class XtraReport : DevExpress.XtraReports.UI.XtraReport {
+        private DevExpress.XtraReports.UI.PageHeaderBand pageHeaderBand1;
+        private DevExpress.XtraReports.UI.DetailBand detailBand1;
+        private DevExpress.XtraReports.UI.PageFooterBand pageFooterBand1;
+        private DevExpress.XtraReports.UI.TopMarginBand topMarginBand1;
+        private DevExpress.XtraReports.UI.BottomMarginBand bottomMarginBand1;
+        private DevExpress.XtraReports.UI.ReportHeaderBand ReportHeader;
+        private DevExpress.XtraReports.UI.XRLabel label6;
+        private DevExpress.XtraReports.UI.XRLabel label5;
+        private DevExpress.XtraReports.Parameters.Parameter STOPDATE;
+        private DevExpress.XtraReports.UI.XRLabel label2;
+        private DevExpress.XtraReports.Parameters.Parameter STARTDATE;
+        private DevExpress.XtraReports.UI.XRLabel label4;
+        private DevExpress.XtraReports.UI.XRLabel label3;
+        private DevExpress.XtraReports.UI.XRLabel label1;
+        private DevExpress.XtraReports.Parameters.Parameter paramTimeStamp;
+        private DevExpress.XtraReports.UI.XRPivotGrid pivotGrid1;
+        private DevExpress.XtraReports.UI.PivotGrid.XRPivotGridField pivotGridField1;
+        private DevExpress.XtraReports.UI.PivotGrid.XRPivotGridField pivotGridField2;
+        private DevExpress.XtraReports.UI.PivotGrid.XRPivotGridField pivotGridField3;
+        private DevExpress.XtraReports.UI.PivotGrid.XRPivotGridField pivotGridField4;
+        private DevExpress.XtraReports.UI.PivotGrid.XRPivotGridField pivotGridField5;
+        private DevExpress.XtraReports.UI.PivotGrid.XRPivotGridField pivotGridField6;
+        private DevExpress.XtraReports.UI.PivotGrid.XRPivotGridField pivotGridField7;
+        private DevExpress.XtraReports.Parameters.Parameter paramUser;
+        private DevExpress.XtraReports.Parameters.Parameter paramReportID;
+        private DevExpress.XtraReports.Parameters.Parameter paramOperatorName;
+        private DevExpress.XtraReports.Parameters.Parameter paramReportName;
+        private DevExpress.XtraReports.Parameters.Parameter paramReportDescription;
+        private DevExpress.XtraReports.Parameters.Parameter paramReportEntity;
+        private System.Resources.ResourceManager _resources;
+        public XtraReport() {
+            this.InitializeComponent();
+        }
+        private System.Resources.ResourceManager resources {
+            get {
+                if (_resources == null) {
+                    string resourceString = "zsrvvgEAAACRAAAAbFN5c3RlbS5SZXNvdXJjZXMuUmVzb3VyY2VSZWFkZXIsIG1zY29ybGliLCBWZXJza" +
+                        "W9uPTQuMC4wLjAsIEN1bHR1cmU9bmV1dHJhbCwgUHVibGljS2V5VG9rZW49Yjc3YTVjNTYxOTM0ZTA4O" +
+                        "SNTeXN0ZW0uUmVzb3VyY2VzLlJ1bnRpbWVSZXNvdXJjZVNldAIAAAAAAAAAAAAAAFBBRFBBRFC0AAAA";
+                    this._resources = new DevExpress.XtraReports.Serialization.XRResourceManager(resourceString);
+                }
+                return this._resources;
+            }
+        }
+        private void InitializeComponent() {
+            this.pageHeaderBand1 = new DevExpress.XtraReports.UI.PageHeaderBand();
+            this.detailBand1 = new DevExpress.XtraReports.UI.DetailBand();
+            this.pageFooterBand1 = new DevExpress.XtraReports.UI.PageFooterBand();
+            this.topMarginBand1 = new DevExpress.XtraReports.UI.TopMarginBand();
+            this.bottomMarginBand1 = new DevExpress.XtraReports.UI.BottomMarginBand();
+            this.ReportHeader = new DevExpress.XtraReports.UI.ReportHeaderBand();
+            this.label6 = new DevExpress.XtraReports.UI.XRLabel();
+            this.label5 = new DevExpress.XtraReports.UI.XRLabel();
+            this.label2 = new DevExpress.XtraReports.UI.XRLabel();
+            this.label4 = new DevExpress.XtraReports.UI.XRLabel();
+            this.label3 = new DevExpress.XtraReports.UI.XRLabel();
+            this.label1 = new DevExpress.XtraReports.UI.XRLabel();
+            this.pivotGrid1 = new DevExpress.XtraReports.UI.XRPivotGrid();
+            this.pivotGridField1 = new DevExpress.XtraReports.UI.PivotGrid.XRPivotGridField();
+            this.pivotGridField2 = new DevExpress.XtraReports.UI.PivotGrid.XRPivotGridField();
+            this.pivotGridField3 = new DevExpress.XtraReports.UI.PivotGrid.XRPivotGridField();
+            this.pivotGridField4 = new DevExpress.XtraReports.UI.PivotGrid.XRPivotGridField();
+            this.pivotGridField5 = new DevExpress.XtraReports.UI.PivotGrid.XRPivotGridField();
+            this.pivotGridField6 = new DevExpress.XtraReports.UI.PivotGrid.XRPivotGridField();
+            this.pivotGridField7 = new DevExpress.XtraReports.UI.PivotGrid.XRPivotGridField();
+            this.paramUser = new DevExpress.XtraReports.Parameters.Parameter();
+            this.paramTimeStamp = new DevExpress.XtraReports.Parameters.Parameter();
+            this.paramReportID = new DevExpress.XtraReports.Parameters.Parameter();
+            this.paramOperatorName = new DevExpress.XtraReports.Parameters.Parameter();
+            this.paramReportName = new DevExpress.XtraReports.Parameters.Parameter();
+            this.paramReportDescription = new DevExpress.XtraReports.Parameters.Parameter();
+            this.paramReportEntity = new DevExpress.XtraReports.Parameters.Parameter();
+            this.STARTDATE = new DevExpress.XtraReports.Parameters.Parameter();
+            this.STOPDATE = new DevExpress.XtraReports.Parameters.Parameter();
+            ((System.ComponentModel.ISupportInitialize)(this)).BeginInit();
+            // 
+            // pageHeaderBand1
+            // 
+            this.pageHeaderBand1.Font = new System.Drawing.Font("Verdana", 8F, System.Drawing.FontStyle.Bold);
+            this.pageHeaderBand1.HeightF = 48.95833F;
+            this.pageHeaderBand1.Name = "pageHeaderBand1";
+            // 
+            // detailBand1
+            // 
+            this.detailBand1.Font = new System.Drawing.Font("Verdana", 8F);
+            this.detailBand1.HeightF = 10.41667F;
+            this.detailBand1.Name = "detailBand1";
+            // 
+            // pageFooterBand1
+            // 
+            this.pageFooterBand1.Font = new System.Drawing.Font("Verdana", 8F);
+            this.pageFooterBand1.HeightF = 51.04167F;
+            this.pageFooterBand1.Name = "pageFooterBand1";
+            // 
+            // topMarginBand1
+            // 
+            this.topMarginBand1.Name = "topMarginBand1";
+            // 
+            // bottomMarginBand1
+            // 
+            this.bottomMarginBand1.Name = "bottomMarginBand1";
+            // 
+            // ReportHeader
+            // 
+            this.ReportHeader.Controls.AddRange(new DevExpress.XtraReports.UI.XRControl[] {
+                        this.label6,
+                        this.label5,
+                        this.label2,
+                        this.label4,
+                        this.label3,
+                        this.label1,
+                        this.pivotGrid1});
+            this.ReportHeader.HeightF = 251.0417F;
+            this.ReportHeader.Name = "ReportHeader";
+            // 
+            // label6
+            // 
+            this.label6.LocationFloat = new DevExpress.Utils.PointFloat(89.58334F, 0F);
+            this.label6.Multiline = true;
+            this.label6.Name = "label6";
+            this.label6.Padding = new DevExpress.XtraPrinting.PaddingInfo(2, 2, 0, 0, 100F);
+            this.label6.SizeF = new System.Drawing.SizeF(18.75002F, 23F);
+            this.label6.Text = "to\r\n";
+            // 
+            // label5
+            // 
+            this.label5.DataBindings.AddRange(new DevExpress.XtraReports.UI.XRBinding[] {
+                        new DevExpress.XtraReports.UI.XRBinding(this.STOPDATE, "Text", "{0:M/d/yyyy}")});
+            this.label5.LocationFloat = new DevExpress.Utils.PointFloat(108.3334F, 0F);
+            this.label5.Name = "label5";
+            this.label5.Padding = new DevExpress.XtraPrinting.PaddingInfo(2, 2, 0, 0, 100F);
+            this.label5.SizeF = new System.Drawing.SizeF(100F, 23F);
+            this.label5.Text = "label5";
+            // 
+            // label2
+            // 
+            this.label2.DataBindings.AddRange(new DevExpress.XtraReports.UI.XRBinding[] {
+                        new DevExpress.XtraReports.UI.XRBinding(this.STARTDATE, "Text", "{0:M/d/yyyy}")});
+            this.label2.LocationFloat = new DevExpress.Utils.PointFloat(0F, 0F);
+            this.label2.Name = "label2";
+            this.label2.Padding = new DevExpress.XtraPrinting.PaddingInfo(2, 2, 0, 0, 100F);
+            this.label2.SizeF = new System.Drawing.SizeF(89.58334F, 23F);
+            this.label2.Text = "label2";
+            // 
+            // label4
+            // 
+            this.label4.LocationFloat = new DevExpress.Utils.PointFloat(528.125F, 0F);
+            this.label4.Name = "label4";
+            this.label4.Padding = new DevExpress.XtraPrinting.PaddingInfo(2, 2, 0, 0, 100F);
+            this.label4.SizeF = new System.Drawing.SizeF(255.2083F, 23F);
+            this.label4.Text = "Count of Properties = Count of Total Samples ";
+            // 
+            // label3
+            // 
+            this.label3.LocationFloat = new DevExpress.Utils.PointFloat(219.7917F, 0F);
+            this.label3.Name = "label3";
+            this.label3.Padding = new DevExpress.XtraPrinting.PaddingInfo(2, 2, 0, 0, 100F);
+            this.label3.SizeF = new System.Drawing.SizeF(308.3333F, 23F);
+            this.label3.Text = "Count of Delta Properties = Count of Matched Samples ";
+            // 
+            // label1
+            // 
+            this.label1.DataBindings.AddRange(new DevExpress.XtraReports.UI.XRBinding[] {
+                        new DevExpress.XtraReports.UI.XRBinding(this.paramTimeStamp, "Text", "{0:M/d/yyyy}")});
+            this.label1.LocationFloat = new DevExpress.Utils.PointFloat(790F, 0F);
+            this.label1.Name = "label1";
+            this.label1.Padding = new DevExpress.XtraPrinting.PaddingInfo(2, 2, 0, 0, 100F);
+            this.label1.SizeF = new System.Drawing.SizeF(100F, 23F);
+            this.label1.Text = "label1";
+            // 
+            // pivotGrid1
+            // 
+            this.pivotGrid1.Fields.AddRange(new DevExpress.XtraReports.UI.PivotGrid.XRPivotGridField[] {
+                        this.pivotGridField1,
+                        this.pivotGridField2,
+                        this.pivotGridField3,
+                        this.pivotGridField4,
+                        this.pivotGridField5,
+                        this.pivotGridField6,
+                        this.pivotGridField7});
+            this.pivotGrid1.LocationFloat = new DevExpress.Utils.PointFloat(0F, 22.99999F);
+            this.pivotGrid1.Name = "pivotGrid1";
+            this.pivotGrid1.OptionsDataField.RowHeaderWidth = 20;
+            this.pivotGrid1.OptionsPrint.FilterSeparatorBarPadding = 3;
+            this.pivotGrid1.SizeF = new System.Drawing.SizeF(890F, 225F);
+            // 
+            // pivotGridField1
+            // 
+            this.pivotGridField1.Area = DevExpress.XtraPivotGrid.PivotArea.RowArea;
+            this.pivotGridField1.AreaIndex = 0;
+            this.pivotGridField1.Caption = "Stream Name";
+            this.pivotGridField1.FieldName = "SamplingPoint.SamplePointName";
+            this.pivotGridField1.Name = "pivotGridField1";
+            this.pivotGridField1.Width = 190;
+            // 
+            // pivotGridField2
+            // 
+            this.pivotGridField2.Area = DevExpress.XtraPivotGrid.PivotArea.RowArea;
+            this.pivotGridField2.AreaIndex = 1;
+            this.pivotGridField2.Caption = "Property Name";
+            this.pivotGridField2.FieldName = "ComponentName";
+            this.pivotGridField2.Name = "pivotGridField2";
+            this.pivotGridField2.Width = 190;
+            // 
+            // pivotGridField3
+            // 
+            this.pivotGridField3.AllowedAreas = DevExpress.XtraPivotGrid.PivotGridAllowedAreas.DataArea;
+            this.pivotGridField3.Area = DevExpress.XtraPivotGrid.PivotArea.DataArea;
+            this.pivotGridField3.AreaIndex = 0;
+            this.pivotGridField3.Caption = "Count";
+            this.pivotGridField3.FieldName = "Value";
+            this.pivotGridField3.MinWidth = 2;
+            this.pivotGridField3.Name = "pivotGridField3";
+            this.pivotGridField3.SummaryType = DevExpress.Data.PivotGrid.PivotSummaryType.Count;
+            this.pivotGridField3.Width = 75;
+            // 
+            // pivotGridField4
+            // 
+            this.pivotGridField4.Area = DevExpress.XtraPivotGrid.PivotArea.DataArea;
+            this.pivotGridField4.AreaIndex = 1;
+            this.pivotGridField4.Caption = "Ave";
+            this.pivotGridField4.CellFormat.FormatString = "#.##";
+            this.pivotGridField4.CellFormat.FormatType = DevExpress.Utils.FormatType.Numeric;
+            this.pivotGridField4.FieldName = "Value";
+            this.pivotGridField4.Name = "pivotGridField4";
+            this.pivotGridField4.SummaryType = DevExpress.Data.PivotGrid.PivotSummaryType.Average;
+            this.pivotGridField4.Width = 75;
+            // 
+            // pivotGridField5
+            // 
+            this.pivotGridField5.Area = DevExpress.XtraPivotGrid.PivotArea.DataArea;
+            this.pivotGridField5.AreaIndex = 2;
+            this.pivotGridField5.Caption = "Std Dev";
+            this.pivotGridField5.CellFormat.FormatString = "#.##";
+            this.pivotGridField5.CellFormat.FormatType = DevExpress.Utils.FormatType.Numeric;
+            this.pivotGridField5.FieldName = "Value";
+            this.pivotGridField5.Name = "pivotGridField5";
+            this.pivotGridField5.SummaryType = DevExpress.Data.PivotGrid.PivotSummaryType.StdDev;
+            this.pivotGridField5.Width = 75;
+            // 
+            // pivotGridField6
+            // 
+            this.pivotGridField6.Area = DevExpress.XtraPivotGrid.PivotArea.DataArea;
+            this.pivotGridField6.AreaIndex = 3;
+            this.pivotGridField6.Caption = "Min";
+            this.pivotGridField6.CellFormat.FormatString = "#.##";
+            this.pivotGridField6.CellFormat.FormatType = DevExpress.Utils.FormatType.Numeric;
+            this.pivotGridField6.FieldName = "Value";
+            this.pivotGridField6.Name = "pivotGridField6";
+            this.pivotGridField6.SummaryType = DevExpress.Data.PivotGrid.PivotSummaryType.Min;
+            this.pivotGridField6.Width = 75;
+            // 
+            // pivotGridField7
+            // 
+            this.pivotGridField7.Area = DevExpress.XtraPivotGrid.PivotArea.DataArea;
+            this.pivotGridField7.AreaIndex = 4;
+            this.pivotGridField7.Caption = "Max";
+            this.pivotGridField7.CellFormat.FormatString = "#.##";
+            this.pivotGridField7.CellFormat.FormatType = DevExpress.Utils.FormatType.Numeric;
+            this.pivotGridField7.FieldName = "Value";
+            this.pivotGridField7.Name = "pivotGridField7";
+            this.pivotGridField7.SummaryType = DevExpress.Data.PivotGrid.PivotSummaryType.Max;
+            this.pivotGridField7.Width = 75;
+            // 
+            // paramUser
+            // 
+            this.paramUser.Name = "paramUser";
+            this.paramUser.ValueInfo = "SYSTEM";
+            this.paramUser.Visible = false;
+            // 
+            // paramTimeStamp
+            // 
+            this.paramTimeStamp.Name = "paramTimeStamp";
+            this.paramTimeStamp.ValueInfo = "12/27/2015 10:05 AM";
+            this.paramTimeStamp.Visible = false;
+            // 
+            // paramReportID
+            // 
+            this.paramReportID.Name = "paramReportID";
+            this.paramReportID.ValueInfo = "XtraReport";
+            this.paramReportID.Visible = false;
+            // 
+            // paramOperatorName
+            // 
+            this.paramOperatorName.Name = "paramOperatorName";
+            this.paramOperatorName.ValueInfo = "System Manager";
+            this.paramOperatorName.Visible = false;
+            // 
+            // paramReportName
+            // 
+            this.paramReportName.Name = "paramReportName";
+            this.paramReportName.ValueInfo = "Mgt Stat S";
+            this.paramReportName.Visible = false;
+            // 
+            // paramReportDescription
+            // 
+            this.paramReportDescription.Name = "paramReportDescription";
+            this.paramReportDescription.ValueInfo = "custom view";
+            this.paramReportDescription.Visible = false;
+            // 
+            // paramReportEntity
+            // 
+            this.paramReportEntity.Name = "paramReportEntity";
+            this.paramReportEntity.Visible = false;
+            // 
+            // STARTDATE
+            // 
+            this.STARTDATE.Description = "Start date";
+            this.STARTDATE.Name = "STARTDATE";
+            this.STARTDATE.Type = typeof(System.DateTime);
+            this.STARTDATE.ValueInfo = "12/01/2015 08:14:43";
+            // 
+            // STOPDATE
+            // 
+            this.STOPDATE.Description = "Stop Date";
+            this.STOPDATE.Name = "STOPDATE";
+            this.STOPDATE.Type = typeof(System.DateTime);
+            this.STOPDATE.ValueInfo = "12/23/2015 08:16:21";
+            // 
+            // XtraReport
+            // 
+            this.Bands.AddRange(new DevExpress.XtraReports.UI.Band[] {
+                        this.pageHeaderBand1,
+                        this.detailBand1,
+                        this.pageFooterBand1,
+                        this.topMarginBand1,
+                        this.bottomMarginBand1,
+                        this.ReportHeader});
+            this.DefaultPrinterSettingsUsing.UseMargins = true;
+            this.DefaultPrinterSettingsUsing.UsePaperKind = true;
+            this.Landscape = true;
+            this.Name = "XtraReport";
+            this.PageHeight = 850;
+            this.PageWidth = 1100;
+            this.Parameters.AddRange(new DevExpress.XtraReports.Parameters.Parameter[] {
+                        this.paramUser,
+                        this.paramTimeStamp,
+                        this.paramReportID,
+                        this.paramOperatorName,
+                        this.paramReportName,
+                        this.paramReportDescription,
+                        this.paramReportEntity,
+                        this.STARTDATE,
+                        this.STOPDATE});
+            this.Version = "12.2";
+            ((System.ComponentModel.ISupportInitialize)(this)).EndInit();
+        }
+    }
+}
