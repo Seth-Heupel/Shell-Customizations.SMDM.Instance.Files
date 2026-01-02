@@ -1,0 +1,45 @@
+SampleManager version 11.1                               10-JUN-2015 11:33:38.06
+C:\Thermo\SampleManager\Server\SMDM\syntax\default.lis                Page     1
+
+     1: {
+     2: Syntax automatically generated on 30-JUN-2000 By SYSTEM    
+     3: Syntax String : LIT(SM-)+DAT+LIT(-)+INC(-6,SYNTAX)
+     4: }
+     5:   
+     6: ROUTINE syntax
+     7:   
+     8:         SET FORMAT "9999999999"
+     9:  
+    10:         date_now = NOW
+    11:         SET DATE FORMAT "DD-MON-YYYY H24:MI:SS.CC"
+    12:  
+    13:         full_date = MIDSTRING ( date_now, 1, 11 )
+    14:   
+    15:         sample_synt = GLOBAL ( "CURRENT_LIBRARY" )
+    16:         inc_sample_synt = RIGHTSTRING ( "000000" : STRIP ( INCREMENT ( "SYNTAX", sample_synt ) ), 6 )
+    17:         inc_samp_synt_val_1 = inc_sample_synt
+    18:   
+    19:         return_line = "SM-" : full_date : "-" : inc_samp_synt_val_1
+    20:  
+    21:         ret_value = STRIP ( return_line ) # " "
+    22:  
+    23:         WHILE ( ret_value <> return_line ) DO
+    24:                 return_line = ret_value
+    25:                 ret_value = return_line # " "
+    26:         ENDWHILE
+    27:  
+    28:         RESTORE DATE FORMAT
+    29:  
+    30:         RETURN ( return_line )
+    31:  
+    32: ENDROUTINE
+
+Format uses 7 variable(s), named as follows:
+
+        DATENOW
+        FULLDATE
+        INCSAMPLESYNT
+        INCSAMPSYNTVAL1
+        RETURNLINE
+        RETVALUE
+        SAMPLESYNT
