@@ -1,0 +1,1544 @@
+{*****************************************************************************
+*
+* Module Name   : LIT_LOAD_REMOTE.RPF
+*
+* Purpose       : create csv files for Samples From source  LIMS / remote tables - save as 
+*		source tables for import on destination lims - 	
+*		run from menu - routine explorer_load_samples, or from main
+*		for jobs  plus samples ( and tests and results ) 
+*		(and analysis and components)
+* Portability   : Not Tested
+*
+* Document Ref. :
+*
+* Re-entrant    : No
+*
+* Specification :
+*
+******************************************************************************
+* Modification History
+*
+* Version   Date        Author           Modify Details
+******************************************************************************
+* 1.0       04/03/2015  G.W. Walters    Created
+* 	    07/07/2015  G.W.w		Use date for file and log
+* 	    08/18/2015 G.W.W		add explorer_Reset_import and export_status for samples that need re-import
+*	    				comment out Main ProcessMainJob - jobs not needed
+*	    08/21/2105  G.W.W 		add Load_sample_Point
+*	    09/04/2015  G.W.W		add ProcessMainAnalysis , ProcessMainComponent
+          05/24/2018   G.W.W		in LoadSamples, limit to S_LIMIT at a time , order from l4 query
+
+	  08/22/2018	GWW		add ProcessMainSamplePoint for scheduled task run	
+						also add sp to export_status
+	  09/24/2018 	GWW		add registry smp$transfer_status  set to C or A	
+						use in SELECTs in check_samp, check_job, process_main_sample, process_main_job
+    
+	  03/10/2020   GWW  Changes added for Convent in ProcessMainSample - Use C_Date to set 1 day back
+						  from Sample date since Comp date and auth date not reliable.   can set to 0 day for A site
+      05/26/2020    GWW  		in export status - versionedAnalysis - anlaysis count 
+         6/3/2020    GWW		in export status add versioned_Component section
+******************************************************************************}
+
+SET NOTPROTECTED
+SET COMPILE_OPTION DECLARE
+ENABLE WINDOWS
+SET NAME "DEFER/"
+
+JOIN LIBRARY $lib_re_globals
+JOIN LIBRARY $lib_re_context
+JOIN LIBRARY $browse_field
+JOIN LIBRARY $lib_re_interface
+JOIN LIBRARY $lib_re_collection
+JOIN LIBRARY $lib_twr_user
+JOIN LIBRARY $result_list
+JOIN LIBRARY $LIB_UTILS
+{JOIN LIBRARY $TABLE_LOAD_SAVE_LIB}
+JOIN LIBRARY LIT_TABLE_LOADSAVLIB
+
+
+JOIN STANDARD_LIBRARY STD_ARRAY
+JOIN STANDARD_LIBRARY STD_ARRAY_SELECT
+JOIN STANDARD_LIBRARY STD_CLIENT
+JOIN STANDARD_LIBRARY STD_PROMPT
+JOIN STANDARD_LIBRARY STD_WORKFLOW
+JOIN STANDARD_LIBRARY STD_MESSAGE
+JOIN STANDARD_LIBRARY STD_STRUCTURE
+
+	
+CONSTANT crlf        = ASCII(10) : ASCII(13)
+
+CONSTANT basedir =  "SMP$CSVIMPORT:"
+
+CONSTANT SampTable = "L4_REMOTE_SAMPLE"
+CONSTANT JobTable = "L4_REMOTE_JOB_HEADER"
+CONSTANT TestTable = "L4_REMOTE_TEST"
+CONSTANT ResultTable = "L4_REMOTE_RESULT"
+CONSTANT SampPointTable = "L4_REMOTE_SAMPLE_POINT"
+CONSTANT AnalysisTable = "L4_remote_versioned_analysis"
+CONSTANT ComponentTable = "L4_remote_versioned_component"
+
+CONSTANT OV ="__OVERWRITE"
+
+CONSTANT S_LIMIT = 30  {Limit sample load , so test & result load is limited, may vary by location}
+  { Can not  use Constants in query/ table expressions - 
+   change table names in routines as needed }
+DECLARE TStatus
+DECLARE TransferStatus
+
+TStatus = "smp$transfer_status"
+TransferStatus = LOGICAL(TStatus)
+
+
+{**********************          MAIN             *****************************}
+
+
+
+{ProcessMainJob() }
+ProcessMainSamplePoint()
+ProcessMainSample()
+ProcessMainAnalysis()
+ProcessMainComponent()
+
+EXIT
+
+{******************************************************************************}
+
+ROUTINE ProcessMainJob
+
+DECLARE    JobNo, jobFlag, job_select_array, job_array, jobCount   ,date_now
+
+
+date_now = NOW
+date_now = SUBSTITUTE ( date_now, "/", "_" )
+date_now = SUBSTITUTE ( date_now, " ", "_" )
+date_now = SUBSTITUTE ( date_now, ":", "_" )
+date_now = SUBSTITUTE ( date_now, ".", "_" )
+    
+jobFlag      = TRUE
+
+jobCount = 0
+    
+ARRAY job_select_array
+ARRAY job_array
+
+
+
+IF (TransferStatus = "C") THEN 
+	JobNo = SELECT L4_REMOTE_JOB_HEADER.JOB_NAME 
+		WHERE status = "C" OR status = "A"
+ELSEIF (TransferStatus = "A") THEN 
+	JobNo = SELECT L4_REMOTE_JOB_HEADER.JOB_NAME 
+		WHERE status = "A" 
+ELSE
+	JobNo = SELECT L4_REMOTE_JOB_HEADER.JOB_NAME 
+		WHERE status = "C" OR status = "A"
+ENDIF
+
+
+		
+While JobNo <> EMPTY DO 
+  	
+  	jobCount = jobCount + 1
+	        
+	IF (NOT jobFlag) THEN
+	        
+	      array_select_add(job_select_array,ARRAY_SELECT_OR,EMPTY,EMPTY)
+	            
+	 ENDIF
+	
+	array_select_add(job_select_array,ARRAY_SELECT_EQ,"JOB_NAME",JobNo)
+	          
+        jobFlag = FALSE
+  	
+  	job_array[jobCount]=jobNo
+  
+  	NEXT L4_remote_job_header
+  	JobNo = Select L4_remote_job_header.job_name
+ ENDWHILE
+    
+IF JobCount > 0 THEN
+
+ 
+	batch_table_to_csv_file(JobTable,"job_header",basedir:"job":date_now:OV:".csv",job_select_array)
+   
+       
+ ENDIF
+
+Export_status ("JOB_HEADER", job_array)
+  
+    
+ENDROUTINE 
+
+{******************************************************************************}
+
+ROUTINE ProcessMainSamplePoint
+
+{DECLARE    JobNo, jobFlag, job_select_array, job_array, jobCount   ,date_now}
+DECLARE		SPNo, spFlag, sp_select_array, sp_array , spCount, date_now
+
+date_now = NOW
+date_now = SUBSTITUTE ( date_now, "/", "_" )
+date_now = SUBSTITUTE ( date_now, " ", "_" )
+date_now = SUBSTITUTE ( date_now, ":", "_" )
+date_now = SUBSTITUTE ( date_now, ".", "_" )
+    
+spFlag      = TRUE
+
+spCount = 0
+    
+ARRAY sp_select_array
+ARRAY sp_array
+ 
+SPNo = SELECT L4_REMOTE_SAMPLE_POINT.IDENTITY 
+		WHERE IDENTITY <> NULL
+		
+		
+While SPNo <> EMPTY DO 
+  	
+  	spCount = spCount + 1
+	        
+	IF (NOT spFlag) THEN
+	        
+	      array_select_add(sp_select_array,ARRAY_SELECT_OR,EMPTY,EMPTY)
+	            
+	 ENDIF
+	
+	array_select_add(sp_select_array,ARRAY_SELECT_EQ,"IDENTITY",SPNo)
+	          
+        spFlag = FALSE
+  	
+  	sp_array[spCount]=spNo
+  
+  	NEXT L4_remote_sample_point
+  	SPNo = Select L4_remote_sample_point.identity
+ ENDWHILE
+    
+IF spCount > 0 THEN
+
+ 
+	batch_table_to_csv_file(SampPointTable,"sample_point",basedir:"sample_point":date_now:OV:".csv",sp_select_array)
+   
+       
+ ENDIF
+
+Export_status ("SAMPLE_POINT", sp_array)
+  
+    
+ENDROUTINE 
+
+{******************************************************************************}
+
+
+ROUTINE ProcessMainSample
+
+
+DECLARE SampNo, sampFlag , sampCount, sample_select_array, sample_array ,date_now, sampLimit, date_C
+
+date_C = NOW - INTERVAL(1)  { 1 day back}
+
+date_now = NOW
+date_now = SUBSTITUTE ( date_now, "/", "_" )
+date_now = SUBSTITUTE ( date_now, " ", "_" )
+date_now = SUBSTITUTE ( date_now, ":", "_" )
+date_now = SUBSTITUTE ( date_now, ".", "_" )
+
+ARRAY sample_select_array
+ARRAY sample_array
+
+sampCount = 0
+sampLimit=0
+sampFlag = TRUE
+
+{
+IF (transfer_status = "C") THEN 
+	SampNo = SELECT L4_remote_sample.id_numeric 
+		WHERE status = "C" OR status = "A"
+ELSEIF (transfer_status = "A") THEN 
+	SampNo = SELECT L4_remote_sample.id_numeric 
+		WHERE status = "A"
+ELSE
+	SampNo = SELECT L4_remote_sample.id_numeric 
+		WHERE status = "C" OR status = "A"
+ENDIF
+}
+IF (transfer_status = "C") THEN 
+	SampNo = SELECT L4_remote_sample.id_numeric 
+		WHERE   sampled_date < date_C AND status = "C" OR status = "A"
+ELSEIF (transfer_status = "A") THEN 
+	SampNo = SELECT L4_remote_sample.id_numeric 
+		WHERE sampled_date < date_C AND  status = "A"
+ELSE
+	SampNo = SELECT L4_remote_sample.id_numeric 
+		WHERE sampled_date < date_C AND  status = "C" OR status = "A"
+ENDIF
+
+
+
+  		
+While SampNo <> EMPTY DO 
+  	
+    IF sampLimit < S_LIMIT THEN
+  	sampCount = sampCount + 1
+	sampLimit = sampLimit + 1
+	        
+	IF (NOT sampFlag) THEN
+	        
+	      array_select_add(sample_select_array,ARRAY_SELECT_OR,EMPTY,EMPTY)
+	            
+	 ENDIF
+	
+	 array_select_add(sample_select_array,ARRAY_SELECT_EQ,"ID_NUMERIC",SampNo)
+	          
+        sampFlag = FALSE
+  	
+  	sample_array[sampCount]=SampNo
+    ENDIF
+
+    NEXT L4_remote_sample
+    SampNo = Select L4_remote_sample.id_numeric
+
+
+ ENDWHILE
+    
+
+ IF (sampCount > 0 ) THEN
+ 	
+       batch_table_to_csv_file(SampTable,"SAMPLE",basedir:"sample":date_now:OV:".csv",sample_select_array)
+		
+	load_tests(sample_array)
+		
+	Export_status ("SAMPLE", sample_array)
+  ENDIF 
+
+{EXIT}	
+
+ENDROUTINE
+
+{******************************************************************************}
+
+ROUTINE explorer_load_samples (  rmb_object, object, list )
+
+DECLARE   t_name
+
+    lib_re_interface_initialise ()                        
+
+    list.set_first()
+    
+    t_name = list.current.table
+    
+  {  flash_message ( "lit_load_samples" : "sample count  " : SampCount : " " :
+    			 " ", TRUE ) 
+}
+
+    IF t_name = JobTable THEN 
+    load_jobs(list)
+    ENDIF
+
+    IF t_name = SampTable THEN
+    
+    load_samples(  list)
+
+    ENDIF
+
+    IF t_name = SampPointTable THEN
+	load_sample_point ( list ) 
+    ENDIF
+
+
+
+ENDROUTINE  {explorer_load_samples}
+
+{******************************************************************************}
+
+
+{******************************************************************************}
+
+ROUTINE explorer_reset_import (  rmb_object, object, list )
+
+DECLARE   t_name , SampNo, Samp, JobNo, Job
+		, analysis, analysis_id , ver , comp_name
+    lib_re_interface_initialise ()                        
+
+    list.set_first()
+    
+    t_name = list.current.table
+    
+  {  flash_message ( "explorer_reset_import" : "sample count  " : SampCount : " " :
+    			 " ", TRUE ) 
+}
+
+    IF t_name = "JOB_HEADER" THEN 
+   { reset_jobs(list)  }
+          WHILE ( list.current != EMPTY ) DO
+           
+              JobNo = SELECT job_header.job_name  IN OBJECT list.current
+              
+               	IF ( JobNo <> EMPTY ) 
+   	         	
+   	         	Job =  SELECT job_header.job_name 
+         			FOR UPDATE
+         				WHERE job_name = JobNo
+   	         	IF ( Job <> EMPTY ) 
+   	       	       START WRITE TRANSACTION "update job_header"
+   	       	       ASSIGN job_header.is_import = FALSE
+   	         		UPDATE sample
+   	                	COMMIT
+   	                ENDIF
+   	
+                    ENDIF
+              
+               list.set_next()
+              
+          ENDWHILE
+   
+
+   
+    ENDIF
+
+    IF t_name = "SAMPLE" THEN
+    
+  
+    
+       WHILE ( list.current != EMPTY ) DO
+        
+           SampNo = SELECT sample.id_numeric  IN OBJECT list.current
+           
+            	IF ( SampNo <> EMPTY ) 
+	         	
+	         	Samp =  SELECT sample.id_numeric 
+      			FOR UPDATE
+      				WHERE id_numeric = SampNo
+	         	IF ( Samp <> EMPTY ) 
+	       	       START WRITE TRANSACTION "update sample"
+	       	       ASSIGN sample.is_import = FALSE
+	         		UPDATE sample
+	                	COMMIT
+	                ENDIF
+	
+                 ENDIF
+           
+            list.set_next()
+           
+       ENDWHILE
+
+    ENDIF
+
+  IF t_name = "VERSIONED_ANALYSIS" THEN
+    
+  
+    {analysis }
+       WHILE ( list.current != EMPTY ) DO
+        
+           analysis_id = SELECT versioned_analysis.identity  IN OBJECT list.current
+           
+            	IF ( analysis_id <> EMPTY ) 
+            		ver = select analysis_view.analysis_version WHERE analysis_view.identity = analysis_id
+	         	
+	         	analysis =  SELECT versioned_analysis.identity 
+      			FOR UPDATE
+      				WHERE identity = analysis_id
+      				   AND analysis_version = ver
+	          IF ( analysis <> EMPTY ) 
+	       	       START WRITE TRANSACTION "update analysis"
+	       	       ASSIGN versioned_analysis.is_import = FALSE
+	         		UPDATE versioned_analysis
+	                	COMMIT
+	          ENDIF
+	
+                 ENDIF
+           
+            list.set_next()
+           
+       ENDWHILE
+       
+       list.set_first()
+       {component}
+        WHILE ( list.current != EMPTY ) DO
+               
+                  analysis_id = SELECT versioned_analysis.identity  IN OBJECT list.current
+                  
+                   IF ( analysis_id <> EMPTY ) 
+       	         	ver = select analysis_view.analysis_version WHERE analysis_view.identity = analysis_id
+       	         	comp_name =  SELECT versioned_component.name 
+             			FOR UPDATE
+             				WHERE analysis = analysis_id  AND analysis_version = ver
+       	         	IF ( comp_name <> EMPTY ) 
+       	       	       		START WRITE TRANSACTION "update component"
+       	       	       		ASSIGN versioned_component.is_import = FALSE
+       	         		UPDATE versioned_component
+       	                	COMMIT
+       	                ENDIF
+       	
+                   ENDIF
+                  
+                   list.set_next()
+                  
+       ENDWHILE
+
+    ENDIF
+
+ENDROUTINE  {explorer_reset_import}
+
+{******************************************************************************}
+
+
+
+ROUTINE load_jobs(list)
+
+
+DECLARE    JHJobName, flag, job_select_array, job_array,
+        FoundOneNA, ErrorMessage, jobCount    ,date_now
+
+
+date_now = NOW
+date_now = SUBSTITUTE ( date_now, "/", "_" )
+date_now = SUBSTITUTE ( date_now, " ", "_" )
+date_now = SUBSTITUTE ( date_now, ":", "_" )
+date_now = SUBSTITUTE ( date_now, ".", "_" )
+    
+    
+   flag      = TRUE
+   FoundOneNA  = FALSE
+   jobCount = 0
+   
+    
+    ARRAY job_select_array
+    ARRAY job_array
+    
+    WHILE ( list.current != EMPTY ) DO
+    
+       JHJobName = SELECT L4_REMOTE_JOB_HEADER.job_name IN OBJECT list.current
+     
+       IF check_job(JHJobName) THEN      
+       
+          JobCount = JobCount + 1
+        
+          IF (NOT flag) THEN
+        
+            array_select_add(job_select_array,ARRAY_SELECT_OR,EMPTY,EMPTY)
+            
+          ENDIF
+
+          array_select_add(job_select_array,ARRAY_SELECT_EQ,"JOB_name",JHJobName)
+        
+          flag = FALSE
+          
+          job_array[JobCount]=JHJobName
+          
+          
+          
+       ELSE
+       
+          IF NOT FoundOneNA THEN
+             ErrorMessage = "The following Job(s) have no Authorized Samples:"
+          ENDIF
+          
+          FoundOneNA = TRUE
+          
+          ErrorMessage = ErrorMessage : crlf : SELECT job_header.job_name  IN OBJECT list.current       
+          
+       ENDIF   
+        
+       list.set_next()
+        
+    ENDWHILE
+    
+    IF FoundOneNA THEN
+        
+       ErrorMessage = ErrorMessage : crlf : "Please select authorized jobs."
+           
+       CLIENT_MESSAGE_BOX ( ErrorMessage, "Problem with Job Authorization", MB_ICONINFORMATION ) 
+       
+    ENDIF  
+    
+    IF JobCount > 0 THEN
+
+       flag = TRUE 
+    
+       IF (flag) THEN
+       		
+               IF GLOBAL ( "MODE" ) = "INTERACTIVE" THEN
+
+		{  CLIENT_MESSAGE_BOX ( "FOUND SOME JOBS.", "LOAD DB", MB_ICONINFORMATION ) }
+	       ENDIF
+	
+		batch_table_to_csv_file(JobTable,"job_header",basedir:"job":date_now:OV:".csv",job_select_array)
+   
+        	load_samples_by_job(job_array)
+        	
+        	{Export_status ("JOB_HEADER", job_array)}
+       
+       ELSE
+          IF GLOBAL ( "MODE" ) = "INTERACTIVE" THEN
+     
+             CLIENT_MESSAGE_BOX ( "None of the Selected Jobs are Approved at this time.", "Problem with JOB Authorization", MB_ICONINFORMATION )
+   	   ENDIF
+       ENDIF
+       
+    ENDIF
+
+ENDROUTINE  {load_jobs}
+
+{******************************************************************************}
+
+ROUTINE load_samples_by_job (job_array)
+
+DECLARE cnt, loop,SampNo, sampFlag , sampCount, sample_select_array, sample_array,date_now
+
+
+date_now = NOW
+date_now = SUBSTITUTE ( date_now, "/", "_" )
+date_now = SUBSTITUTE ( date_now, " ", "_" )
+date_now = SUBSTITUTE ( date_now, ":", "_" )
+date_now = SUBSTITUTE ( date_now, ".", "_" )
+
+ARRAY sample_select_array
+ARRAY sample_array
+
+cnt = size_of_array(job_array)
+loop = 0
+sampCount = 0
+sampFlag = TRUE
+
+WHILE ( loop < cnt ) DO
+  	loop = loop +1
+  	SampNo = SELECT L4_remote_sample.id_numeric 
+  		WHERE L4_remote_sample.job_name = job_array[loop]
+  		ORDER ON id_numeric
+  	While SampNo <> EMPTY DO 
+  	
+  		sampCount = sampCount + 1
+	        
+	          IF (NOT sampFlag) THEN
+	        
+	            array_select_add(sample_select_array,ARRAY_SELECT_OR,EMPTY,EMPTY)
+	            
+	          ENDIF
+	
+	          array_select_add(sample_select_array,ARRAY_SELECT_EQ,"ID_NUMERIC",SampNo)
+	          
+          	sampFlag = FALSE
+  	
+  		sample_array[sampCount]=SampNo
+  
+  		NEXT L4_remote_sample
+  		SampNo = Select L4_remote_sample.id_numeric
+  	ENDWHILE
+  
+  
+  
+  ENDWHILE
+    
+
+       IF (sampCount > 0 ) THEN
+		IF GLOBAL ( "MODE" ) = "INTERACTIVE" THEN
+
+		{  CLIENT_MESSAGE_BOX ( "FOUND SOME Job-Samples.", "LOAD DB", MB_ICONINFORMATION ) }
+		ENDIF
+	
+		batch_table_to_csv_file(SampTable,"SAMPLE",basedir:"sample":date_now:OV:".csv",sample_select_array)
+		
+		load_tests(sample_array)
+		
+		{Export_status ("SAMPLE", sample_array)}
+   
+	ENDIF 
+	
+ENDROUTINE { load_samples_by_job}
+
+
+{******************************************************************************}
+
+
+
+{******************************************************************************}
+
+ROUTINE load_samples ( list )
+
+DECLARE    SampNo, flag, sample_select_array, sample_array,
+        FoundOneNA, ErrorMessage, SampCount, SampList ,date_now
+
+
+date_now = NOW
+date_now = SUBSTITUTE ( date_now, "/", "_" )
+date_now = SUBSTITUTE ( date_now, " ", "_" )
+date_now = SUBSTITUTE ( date_now, ":", "_" )
+date_now = SUBSTITUTE ( date_now, ".", "_" )
+    
+    
+      flag      = TRUE
+        FoundOneNA  = FALSE
+        SampCount = 0
+    SampList  = ""
+    
+    ARRAY sample_select_array
+    ARRAY sample_array
+    
+    WHILE ( list.current != EMPTY ) DO
+    
+       SampNo = SELECT L4_remote_sample.id_numeric IN OBJECT list.current
+     
+       IF check_samp(SampNo) THEN      
+       
+          SampCount = SampCount + 1
+        
+          IF (NOT flag) THEN
+        
+            array_select_add(sample_select_array,ARRAY_SELECT_OR,EMPTY,EMPTY)
+            
+          ENDIF
+
+          array_select_add(sample_select_array,ARRAY_SELECT_EQ,"ID_NUMERIC",SampNo)
+          
+          SampList = SampList : "," : STRIP(SampNo)
+        
+          flag = FALSE
+          
+          sample_array[SampCount]=SampNo
+          
+          
+          
+       ELSE
+       
+          IF NOT FoundOneNA THEN
+             ErrorMessage = "The following Sample(s) have no Authorized Test or Results:"
+          ENDIF
+          
+          FoundOneNA = TRUE
+          
+          ErrorMessage = ErrorMessage : crlf : SELECT L4_remote_sample . id_numeric  IN OBJECT list.current       
+          
+       ENDIF   
+        
+       list.set_next()
+        
+    ENDWHILE
+    
+    IF FoundOneNA THEN
+        
+       ErrorMessage = ErrorMessage : crlf : "Please select authorized samples."
+       IF GLOBAL ( "MODE" ) = "INTERACTIVE" THEN
+    
+         CLIENT_MESSAGE_BOX ( ErrorMessage, "Problem with Sample Authorization", MB_ICONINFORMATION ) 
+       ENDIF
+       
+    ENDIF  
+    
+    IF SampCount > 0 THEN
+
+       flag = TRUE 
+    
+       IF (flag) THEN
+                IF GLOBAL ( "MODE" ) = "INTERACTIVE" THEN
+
+		{  CLIENT_MESSAGE_BOX ( "FOUND SOME Samples.", "LOAD DB", MB_ICONINFORMATION )   }
+		ENDIF
+	
+		batch_table_to_csv_file(SampTable,"sample",basedir:"sample":date_now:OV:".csv",sample_select_array)
+   
+        load_tests(sample_array)
+        
+        {Export_status ("SAMPLE", sample_array)}
+       
+       ELSE
+          IF GLOBAL ( "MODE" ) = "INTERACTIVE" THEN
+         
+            CLIENT_MESSAGE_BOX ( "None of the Selected Tests are Approved at this time.", "Problem with Test Authorization", MB_ICONINFORMATION )
+           ENDIF
+       ENDIF
+       
+    ENDIF
+
+
+
+
+ENDROUTINE {load_samples}
+
+
+
+{******************************************************************************}
+
+ROUTINE load_sample_point (list )
+
+DECLARE    SampPt, flag, samplePt_select_array, samplePt_array,
+        FoundOneNA, ErrorMessage, SampPtCount, SampPtList ,date_now
+
+{  SampNo, flag, sample_select_array, sample_array,
+        FoundOneNA, ErrorMessage, SampCount, SampList ,date_now }
+
+date_now = NOW
+date_now = SUBSTITUTE ( date_now, "/", "_" )
+date_now = SUBSTITUTE ( date_now, " ", "_" )
+date_now = SUBSTITUTE ( date_now, ":", "_" )
+date_now = SUBSTITUTE ( date_now, ".", "_" )
+    
+    
+      flag      = TRUE
+        FoundOneNA  = FALSE
+        SampPtCount = 0
+    SampPTList  = ""
+    
+    ARRAY samplePt_select_array
+    ARRAY samplePT_array
+    
+    WHILE ( list.current != EMPTY ) DO
+    
+       SampPt = SELECT L4_remote_sample_point.identity IN OBJECT list.current
+     
+          
+       
+          SampPtCount = SampPtCount + 1
+        
+          IF (NOT flag) THEN
+        
+            array_select_add(samplePt_select_array,ARRAY_SELECT_OR,EMPTY,EMPTY)
+            
+          ENDIF
+
+          array_select_add(samplePt_select_array,ARRAY_SELECT_EQ,"IDENTITY",SampPt)
+          
+          SampPtList = SampPtList : "," : STRIP(SampPt)
+        
+          flag = FALSE
+          
+          samplePT_array[SampPtCount]=SampPt
+          
+          
+          
+     
+        
+       list.set_next()
+        
+    ENDWHILE
+    
+    IF FoundOneNA THEN
+        
+       ErrorMessage = ErrorMessage : crlf : "Please select valid sample points."
+       IF GLOBAL ( "MODE" ) = "INTERACTIVE" THEN
+    
+         CLIENT_MESSAGE_BOX ( ErrorMessage, "Problem with Sample Points", MB_ICONINFORMATION ) 
+       ENDIF
+       
+    ENDIF  
+    
+ IF SampPtCount > 0 THEN
+
+       flag = TRUE 
+    
+       IF (flag) THEN
+       		
+               IF GLOBAL ( "MODE" ) = "INTERACTIVE" THEN
+
+		{  CLIENT_MESSAGE_BOX ( "FOUND SOME SAmplePoints.", "LOAD DB", MB_ICONINFORMATION ) }
+	       ENDIF
+	
+		batch_table_to_csv_file(SampPointTable,"sample_point",basedir:"sample_Point":date_now:OV:".csv",samplePt_select_array)
+       
+       ELSE
+          IF GLOBAL ( "MODE" ) = "INTERACTIVE" THEN
+     
+             CLIENT_MESSAGE_BOX ( "None of the sample points exported", "Problem with Sample pOints", MB_ICONINFORMATION )
+   	   ENDIF
+       ENDIF
+       
+    ENDIF
+
+
+
+ENDROUTINE {load_sample_Point}
+
+{******************************************************************************}
+
+
+
+{******************************************************************************}
+
+ROUTINE load_tests (sample_array)
+
+DECLARE cnt, loop, TestNo, testFlag , testCount, test_select_array, test_array ,date_now
+
+
+date_now = NOW
+date_now = SUBSTITUTE ( date_now, "/", "_" )
+date_now = SUBSTITUTE ( date_now, " ", "_" )
+date_now = SUBSTITUTE ( date_now, ":", "_" )
+date_now = SUBSTITUTE ( date_now, ".", "_" )
+
+ARRAY test_select_array
+ARRAY test_array
+
+cnt = size_of_array(sample_array)
+loop = 0
+testCount = 0
+testFlag = TRUE
+
+WHILE ( loop < cnt ) DO
+  	loop = loop +1
+  	TestNo = SELECT L4_remote_test.test_number 
+  		WHERE sample = sample_array[loop]
+  		ORDER ON test_number
+  	While TestNo <> EMPTY DO 
+  	
+  		testCount = testCount + 1
+	        
+	          IF (NOT testFlag) THEN
+	        
+	            array_select_add(test_select_array,ARRAY_SELECT_OR,EMPTY,EMPTY)
+	            
+	          ENDIF
+	
+	          array_select_add(test_select_array,ARRAY_SELECT_EQ,"TEST_NUMBER",TestNo)
+	          
+          	testFlag = FALSE
+  	
+  		test_array[testCount]=TestNo
+  
+  		NEXT L4_remote_test
+  		testNo = Select L4_remote_test.test_number
+  	ENDWHILE
+  
+  
+  
+  ENDWHILE
+    
+
+       IF (testCount > 0 ) THEN
+       		IF GLOBAL ( "MODE" ) = "INTERACTIVE" THEN
+
+		 { CLIENT_MESSAGE_BOX ( "FOUND SOME Tests.", "LOAD DB", MB_ICONINFORMATION ) }
+		  
+		ENDIF
+	
+		batch_table_to_csv_file(TestTable,"TEST",basedir:"test":date_now:OV:".csv",test_select_array)
+		
+		load_results(test_array)		
+   
+	ENDIF 
+
+ { auth test and results - this won't work , tests not laoded yet }
+{
+IF (TransferStatus = "C") THEN 
+	auth_status(TestTable, test_array)
+
+	auth_Status(ResultTable, test_array)
+
+ENDIF
+}	
+ENDROUTINE
+
+
+{******************************************************************************}
+
+
+ROUTINE load_results ( test_array)
+
+DECLARE cnt, loop, ResultName, resultFlag , resultCount, result_select_array, result_array ,date_now
+
+
+date_now = NOW
+date_now = SUBSTITUTE ( date_now, "/", "_" )
+date_now = SUBSTITUTE ( date_now, " ", "_" )
+date_now = SUBSTITUTE ( date_now, ":", "_" )
+date_now = SUBSTITUTE ( date_now, ".", "_" )
+
+ARRAY result_select_array
+ARRAY result_array
+
+cnt = size_of_array(test_array)
+loop = 0
+resultCount = 0
+resultFlag = TRUE
+
+WHILE ( loop < cnt ) DO
+  	loop = loop +1
+  	ResultName = SELECT L4_remote_result.name 
+  		WHERE test_number = test_array[loop] AND STATUS <> "X" AND STATUS <>"R"
+  		ORDER ON name
+  	While ResultName <> EMPTY DO 
+  	
+  		resultCount = resultCount + 1
+	        
+	          IF (NOT resultFlag) THEN
+	        
+	            array_select_add(result_select_array,ARRAY_SELECT_OR,EMPTY,EMPTY)
+	            
+	          ENDIF
+	          array_select_add(result_select_array,ARRAY_SELECT_PUSH,EMPTY,EMPTY)
+	          array_select_add(result_select_array,ARRAY_SELECT_EQ,"TEST_NUMBER",test_array[loop])
+	          array_select_add(result_select_array,ARRAY_SELECT_AND,EMPTY,EMPTY)
+	          array_select_add(result_select_array,ARRAY_SELECT_EQ,"NAME",ResultName)
+	          array_select_add(result_select_array,ARRAY_SELECT_POP,EMPTY,EMPTY)  
+	          
+          	resultFlag = FALSE
+  	
+  		{result_array[resultCount]=ResultName}
+  
+  		NEXT L4_remote_result
+  		ResultName = Select L4_remote_result.name
+  	ENDWHILE
+  
+  
+  
+  ENDWHILE
+    
+
+       IF (resultCount > 0 ) THEN
+	      IF GLOBAL ( "MODE" ) = "INTERACTIVE" THEN
+
+		{CLIENT_MESSAGE_BOX ( "FOUND SOME Results.", "LOAD DB", MB_ICONINFORMATION ) }
+	      ENDIF
+		batch_table_to_csv_file(ResultTable,"RESULT",basedir:"result":date_now:OV:".csv",result_select_array)
+		
+			
+   
+	ENDIF 
+	
+ENDROUTINE
+
+
+{******************************************************************************}
+
+
+
+ROUTINE check_samp ( VALUE SampNo )
+
+DECLARE TestCount
+
+IF (TransferStatus = "C") THEN
+   TestCount = select count L4_remote_TEST
+                   where SAMPLE LIKE SampNo
+		   and	status ="C" OR status = "A"
+
+ELSEIF (TransferStatus = "A")
+   TestCount = select count L4_remote_TEST
+                   where SAMPLE LIKE SampNo
+		     and status = "A"
+ELSE
+   TestCount = select count L4_remote_TEST
+                   where SAMPLE LIKE SampNo
+		   and	status ="C" OR status = "A"
+ENDIF
+ 	           
+
+   {report if no authorized tests are found}
+   if TestCount = 0 then
+	IF GLOBAL ( "MODE" ) = "INTERACTIVE" THEN
+
+         client_message_box("No Authorized tests found.":ascii(13):"Sample Number : ": SampNo: " "
+                         ,"ERROR",MB_OK+MB_ICON_ERROR)
+        ENDIF
+       RETURN (FALSE)
+
+   endif
+
+{Todo - add check for results?}
+   RETURN ( TRUE )
+
+ENDROUTINE  { check_samp }
+
+{******************************************************************************}
+
+
+ROUTINE check_job ( VALUE JHJobName )
+
+DECLARE SampleCount
+
+IF (TransferStatus = "C") THEN 
+   SampleCount = select count SAMPLE
+               where JOB_NAME LIKE JHJobName
+		   and	status ="C" OR status = "A"
+
+ELSEIF (TransferStatus = "A") THEN 
+   SampleCount = select count SAMPLE
+               where JOB_NAME LIKE JHJobName
+		   and	status ="A"
+
+ELSE
+   SampleCount = select count SAMPLE
+               where JOB_NAME LIKE JHJobName
+		   and	status ="C" OR status = "A"
+
+ENDIF
+ 	           
+
+   {report if no authorized samples are found}
+   if SampleCount = 0 then
+      IF GLOBAL ( "MODE" ) = "INTERACTIVE" THEN
+
+         client_message_box("No Authorized samples found.":ascii(13):"Job Name : ": JHJobName: " "
+                         ,"ERROR",MB_OK+MB_ICON_ERROR)
+      ENDIF
+       RETURN (FALSE)
+
+   endif
+
+{Todo - add check for tests?}
+   RETURN ( TRUE )
+
+ENDROUTINE  { check_job }
+
+
+
+{******************************************************************************}
+
+    ROUTINE batch_table_to_csv_file (VALUE name_of_table,VALUE name_of_local_table, VALUE file_name,  selection_array)
+
+{
+*       The main batch save routine - uses passed params to 
+*   calls routines to save the data.
+*
+*******************************************************************************}
+
+    DECLARE error_message , error_occured ,
+        mess_ptr , list_of_fields , return_message
+
+    error_occured = FALSE
+
+
+    IF ( NOT error_occured ) THEN
+
+        IF ( NOT valid_table ( name_of_table ) ) THEN
+
+            message_fetch ( "TABLE_SAVER_ILL_TBL_NAME" , mess_ptr )
+            message_add_parameter ( mess_ptr , name_of_table )
+            error_message = message_get_text ( mess_ptr , 1 )
+            error_occured = TRUE
+        ENDIF
+    ENDIF
+
+    IF ( NOT error_occured ) THEN
+
+        ARRAY list_of_fields ARRAYSIZE ( 0 )
+
+        get_field_names_without_aliases ( name_of_table  ,
+                                          list_of_fields )
+
+        IF ( size_of_array ( list_of_fields ) > 0 ) THEN
+{
+            ARRAY selection_array
+
+	      IF ( name_of_table = "SAMPLE")
+		
+		ARRAY_SELECT_ADD( selection_array, ARRAY_SELECT_EQ, "ID_NUMERIC", "86" )
+		ARRAY_SELECT_ADD( selection_array, ARRAY_SELECT_OR , EMPTY  , EMPTY            )
+		ARRAY_SELECT_ADD( selection_array, ARRAY_SELECT_EQ, "ID_NUMERIC", "87" )
+	      ENDIF 
+	}
+
+
+
+            lit_output_csv_file ( STRIP ( file_name )     ,
+                              STRIP ( name_of_table ) ,
+     					STRIP  (name_of_local_table),                         
+                              list_of_fields          ,
+                              selection_array         ,
+                      FALSE                   ,
+                              return_message          )
+        ENDIF
+
+    ELSE
+        send_message ( error_message , TABLE_SAVER , FALSE )
+        send_message ( "TABLE_SAVER_ABORTED" , TABLE_SAVER , FALSE )
+    ENDIF
+
+ENDROUTINE
+
+{******************************************************************************}
+
+
+ROUTINE Export_status (VALUE t_name, select_array)
+
+  
+    
+    DECLARE cnt, loop,SampNo,  sampCount, JHJobName, jobCount, AnalysisID, AnalysisCount
+							, SPIdentity, spCount
+							, ComponentName, ComponentCount
+   
+    
+    cnt = size_of_array(select_array)
+    loop = 0
+    sampCount = 0
+    jobCount = 0
+     spCount =0
+   
+    
+    IF t_name = "SAMPLE" THEN 
+    
+    WHILE ( loop < cnt ) DO
+      	loop = loop +1
+      	
+      	SampNo = SELECT sample.id_numeric 
+      			FOR UPDATE
+      		WHERE id_numeric = select_array[loop] AND is_import = FALSE
+      		ORDER ON id_numeric
+      	While SampNo <> EMPTY DO 
+      	
+      		sampCount = sampCount + 1
+    	       START WRITE TRANSACTION "update sample"
+    	       ASSIGN sample.is_import = TRUE
+      		UPDATE sample
+             	COMMIT
+      
+      		NEXT sample
+      		SampNo = Select sample.id_numeric
+      	ENDWHILE
+      
+       
+      ENDWHILE
+  
+    
+    ENDIF
+    
+    
+    IF t_name = "JOB_HEADER" THEN 
+        loop = 0
+        WHILE ( loop < cnt ) DO
+          	loop = loop +1
+          	
+          	JHJobName = SELECT job_header.job_name 
+          			FOR UPDATE
+          		WHERE job_name = select_array[loop] AND is_import = FALSE
+          		ORDER ON job_name
+          	While JHJobName <> EMPTY DO 
+          	
+          		jobCount = jobCount + 1
+        	       START WRITE TRANSACTION "update job_header"
+        	       ASSIGN job_header.is_Import = TRUE
+          		UPDATE job_header
+                 	COMMIT
+          
+          		NEXT job_header
+          		JHJobName = Select job_header.job_name
+          	ENDWHILE
+          
+           
+          ENDWHILE
+      
+        
+        ENDIF
+
+
+	IF t_name = "SAMPLE_POINT" THEN 
+        loop = 0
+        WHILE ( loop < cnt ) DO
+          	loop = loop +1
+          	
+          	SPIdentity = SELECT sample_point.identity 
+          			FOR UPDATE
+          		WHERE identity = select_array[loop] AND is_import = FALSE
+          		ORDER ON identity
+          	While SPIdentity <> EMPTY DO 
+          	
+          		spCount = spCount + 1
+        	       START WRITE TRANSACTION "update sample_point"
+        	       ASSIGN sample_point.is_Import = TRUE
+          		UPDATE sample_point
+                 	COMMIT
+          
+          		NEXT sample_point
+          		SPIdentity = Select sample_point.identity
+          	ENDWHILE
+          
+           
+          ENDWHILE
+      
+        
+        ENDIF
+    
+
+    
+      IF t_name = "VERSIONED_ANALYSIS" THEN 
+	  AnalysisCount = 0
+        loop = 0
+        WHILE ( loop < cnt ) DO
+          	loop = loop +1
+          	
+          	AnalysisID = SELECT versioned_analysis.identity
+          			FOR UPDATE
+          		WHERE identity = select_array[loop] AND is_import = FALSE
+          		ORDER ON identity
+          	While AnalysisID <> EMPTY DO 
+          	
+          		AnalysisCount = AnalysisCount + 1
+        	       START WRITE TRANSACTION "update versioned_analysis"
+        	       ASSIGN versioned_analysis.is_Import = TRUE
+          		UPDATE versioned_analysis
+                 	COMMIT
+          
+          		NEXT versioned_analysis
+          		AnalysisID = Select versioned_analysis.identity
+          	ENDWHILE
+          
+           
+          ENDWHILE
+      
+        
+        ENDIF  
+    
+     IF t_name = "VERSIONED_COMPONENT" THEN 
+	  ComponentCount = 0
+        loop = 0
+        WHILE ( loop < cnt ) DO
+          	loop = loop +1
+          	
+          	ComponentName = SELECT versioned_component.name
+          			FOR UPDATE
+          		WHERE name = select_array[loop] AND is_import = FALSE
+          		ORDER ON name
+          	While ComponentName <> EMPTY DO 
+          	
+          		ComponentCount = ComponentCount + 1
+        	       START WRITE TRANSACTION "update versioned_component"
+        	       ASSIGN versioned_component.is_Import = TRUE
+          		UPDATE versioned_component
+                 	COMMIT
+          
+          		NEXT versioned_component
+          		ComponentName = Select versioned_component.name
+          	ENDWHILE
+          
+           
+          ENDWHILE
+      
+        
+        ENDIF  
+
+
+ENDROUTINE 
+
+{export_status}
+
+{******************************************************************************}
+
+{******************************************************************************}
+
+
+ROUTINE auth_status (VALUE t_name, select_array)
+
+  
+    
+    DECLARE cnt, loop,SampNo, testNo, ResultName  ,ResultNameU 
+    
+    cnt = size_of_array(select_array)
+    loop = 0
+      
+    
+    IF t_name = "SAMPLE" THEN 
+    
+    WHILE ( loop < cnt ) DO
+      	loop = loop +1
+      	
+      	SampNo = SELECT sample.id_numeric 
+      			FOR UPDATE
+      		WHERE id_numeric = select_array[loop] 
+      		ORDER ON id_numeric
+      	While SampNo <> EMPTY DO 
+      	
+      		
+    	       START WRITE TRANSACTION "update sample"
+    	       ASSIGN sample.status = "A"
+      		UPDATE sample
+             	COMMIT
+      
+      		NEXT sample
+      		SampNo = Select sample.id_numeric
+      	ENDWHILE
+      
+       
+      ENDWHILE
+  
+    
+    ENDIF
+    
+    
+  IF t_name = "TEST" THEN 
+    
+    WHILE ( loop < cnt ) DO
+      	loop = loop +1
+      	
+      	TestNo = SELECT test.test_number 
+      			FOR UPDATE
+      		WHERE test_number = select_array[loop] 
+      		ORDER ON test_number
+      	While TestNo <> EMPTY DO 
+      	
+      		
+    	       START WRITE TRANSACTION "update test"
+    	       ASSIGN test.status = "A"
+      		UPDATE test
+             	COMMIT
+      
+      		NEXT test
+      		TestNo = Select test.test_number
+      	ENDWHILE
+      
+       
+      ENDWHILE
+  
+    
+    ENDIF
+
+
+  IF t_name = "RESULT" THEN 
+
+    WHILE ( loop < cnt ) DO
+  	loop = loop +1
+  	ResultName = SELECT result.name 
+  		WHERE test_number = select_array[loop]
+  		ORDER ON name
+  	 While ResultName <> EMPTY DO 
+		ResultNameU = SELECT result.name FOR UPDATE 
+		WHERE test_number = select_array[loop] and name = ResultName
+  	
+			WHILE ResultNameU <> EMPTY DO 
+				ASSIGN result.status ="A"
+				UPDATE result
+				COMMIT
+				NEXT result
+  				ResultNameU = Select result.name
+
+
+			ENDWHILE
+
+  		NEXT result
+  		ResultName = Select result.name
+  	 ENDWHILE
+  
+  
+  
+    ENDWHILE
+
+  ENDIF
+
+ 
+ENDROUTINE 
+
+{auth_status}
+
+{******************************************************************************}
+
+
+
+
+ROUTINE ProcessMainAnalysis
+
+
+DECLARE AnalysisID, AnalysisFlag , AnalysisCount, analysis_select_array, analysis_array ,date_now
+
+
+date_now = NOW
+date_now = SUBSTITUTE ( date_now, "/", "_" )
+date_now = SUBSTITUTE ( date_now, " ", "_" )
+date_now = SUBSTITUTE ( date_now, ":", "_" )
+date_now = SUBSTITUTE ( date_now, ".", "_" )
+
+ARRAY analysis_select_array
+ARRAY analysis_array
+
+AnalysisCount = 0
+AnalysisFlag = TRUE
+
+AnalysisID = SELECT L4_remote_versioned_analysis.identity
+		WHERE analysis_version > 0
+  		ORDER ON identity
+While AnalysisID <> EMPTY DO 
+  	
+  	AnalysisCount = AnalysisCount + 1
+	        
+	IF (NOT AnalysisFlag) THEN
+	        
+	      array_select_add(analysis_select_array,ARRAY_SELECT_OR,EMPTY,EMPTY)
+	            
+	 ENDIF
+	
+	 array_select_add(analysis_select_array,ARRAY_SELECT_EQ,"IDENTITY",AnalysisID)
+	          
+        AnalysisFlag = FALSE
+  	
+  	analysis_array[AnalysisCount]=AnalysisID
+  
+  	NEXT L4_remote_versioned_analysis
+  	AnalysisID = Select L4_remote_versioned_analysis.identity
+ ENDWHILE
+    
+
+ IF (AnalysisCount > 0 ) THEN
+ 	
+       batch_table_to_csv_file(AnalysisTable,"VERSIONED_ANALYSIS",basedir:"analysis":date_now:OV:".csv",analysis_select_array)
+		
+	
+		
+	Export_status ("VERSIONED_ANALYSIS", analysis_array)
+  ENDIF 
+
+	
+
+ENDROUTINE
+{ProcessMainAnalysis}
+{******************************************************************************}
+
+{******************************************************************************}
+
+ROUTINE ProcessMainComponent
+
+
+DECLARE ComponentName, ComponentFlag , ComponentCount, component_select_array, component_array ,date_now
+
+
+date_now = NOW
+date_now = SUBSTITUTE ( date_now, "/", "_" )
+date_now = SUBSTITUTE ( date_now, " ", "_" )
+date_now = SUBSTITUTE ( date_now, ":", "_" )
+date_now = SUBSTITUTE ( date_now, ".", "_" )
+
+ARRAY component_select_array
+ARRAY component_array
+
+ComponentCount = 0
+ComponentFlag = TRUE
+
+ComponentName = SELECT L4_remote_versioned_component.name
+		WHERE analysis_version > 0
+  		ORDER ON name
+While ComponentName <> EMPTY DO 
+  	
+  	ComponentCount = ComponentCount + 1
+	        
+	IF (NOT ComponentFlag) THEN
+	        
+	      array_select_add(component_select_array,ARRAY_SELECT_OR,EMPTY,EMPTY)
+	            
+	 ENDIF
+	
+	 array_select_add(component_select_array,ARRAY_SELECT_EQ,"NAME",ComponentName)
+	          
+        ComponentFlag = FALSE
+  	
+  	component_array[ComponentCount]=ComponentName
+  
+  	NEXT L4_remote_versioned_component
+  	ComponentName = Select L4_remote_versioned_component.name
+ ENDWHILE
+    
+
+ IF (ComponentCount > 0 ) THEN
+ 	
+       batch_table_to_csv_file(ComponentTable,"VERSIONED_COMPONENT",basedir:"component":date_now:OV:".csv",component_select_array)
+		
+	
+		
+	Export_status ("VERSIONED_COMPONENT", component_array)
+  ENDIF 
+
+	
+
+ENDROUTINE
+{ProcessMainComponent}
+{******************************************************************************}
+
+{******************************************************************************}
+
+
+{***************************************************************************}
+{*******************     END OF LIT_LOAD_REMOTE       ***********************}
+{***************************************************************************}

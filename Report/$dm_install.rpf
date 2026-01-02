@@ -1,0 +1,377 @@
+{******************************************************************************
+*
+* Module Name : $DM_INSTALL
+*
+* Purpose     : Routines to help install Data Manager
+*
+* Portability : Not Checked
+*
+* Re-entrant  :
+*
+******************************************************************************}
+
+SET COMPILE_OPTION DECLARE
+SET NAME "DEFER/"
+SET NOTPROTECTED
+ENABLE WINDOWS
+
+{*****************************************************************************}
+
+JOIN STANDARD_LIBRARY STD_ARRAY
+JOIN STANDARD_LIBRARY STD_VGL
+JOIN STANDARD_LIBRARY STD_STRUCTURE
+JOIN STANDARD_LIBRARY STD_DATABASE
+
+JOIN LIBRARY $LIB_DB
+JOIN LIBRARY $LIB_UTILS
+JOIN LIBRARY $TABLE_LOAD_SAVE_LIB
+JOIN LIBRARY $LOAD_TABLE_DEFAULTS
+
+GLOBAL CONSTANT G_UPGRADE_TOOLS_ASSEMBLY_NAME     = "Thermo.DataManager.DatabaseSetup.UpgradeTools"
+GLOBAL CONSTANT G_UPGRADE_TOOLS_ASSEMBLY_CLASS    = "Thermo.DataManager.DatabaseSetup.UpgradeTools"
+GLOBAL CONSTANT G_UPGRADE_TOOLS_ASSEMBLY_LOCATION = "SolutionAssemblies"
+
+DECLARE upgradeNetTools, haveDataPackages, currentVersion,  fileSizeIsKb
+
+{*****************************************************************************}
+{*                            M A I N    C O D E                             *}
+{*****************************************************************************}
+
+main_task ( )
+EXIT
+
+{*****************************************************************************}
+
+ROUTINE main_task 
+
+{
+*	Migrate data if needed and install the table defaults
+*
+******************************************************************************}
+
+	DECLARE status
+	status = EMPTY
+
+	{* Initialize default values *}
+	haveDataPackages = FALSE
+	currentVersion = "5_2_0"
+	fileSizeIsKb = FALSE
+
+	{***********************************************************************}
+	{* Check for data packages                                             *}
+	{***********************************************************************}
+	CheckExistingDataPackages()
+
+
+	{***********************************************************************}
+	{* Read dm_global                                                      *}
+	{***********************************************************************}
+	ReadDMGlobalTable()
+
+
+	{***********************************************************************}
+	{* Table Defaults                                                      *}
+	{***********************************************************************}
+
+	IF confirm_with_text ( "Click Yes to load Data Manager TABLE_DETAILS (*.td_csv) files." ) THEN
+		status = load_table_defaults ( "DM_", "", ".TD_CSV" )
+	ENDIF
+
+	{***********************************************************************}
+	{* Data Migration                                                      *}
+	{***********************************************************************}
+
+	IF ( status = EMPTY ) THEN
+
+		status = migrate_data ( )
+
+	ENDIF
+
+	{***********************************************************************}
+	{* Ensure the new VGL reports are compiled                             *}
+	{***********************************************************************}
+
+	IF ( status = EMPTY ) THEN
+
+		IF confirm_with_text ( "Click Yes to compile the Data Manager VGL reports." ) THEN
+			status = compile_reports ( )
+		ENDIF
+
+	ENDIF
+
+	{***********************************************************************}
+	{* Update dm_global                                                    *}
+	{***********************************************************************}
+	UpdateDMGlobalTable()
+
+
+	{***********************************************************************}
+	{* Tell the user what happened                                         *}
+	{***********************************************************************}
+
+	IF ( status = EMPTY )
+
+		flash_message ( "Data Manager Successfully Installed", TRUE )
+
+	ELSE
+
+		flash_message ( status, TRUE )
+
+	ENDIF
+
+ENDROUTINE
+
+{*****************************************************************************}
+{*                         M I G R A T E    D A T A                          *}
+{*****************************************************************************}
+
+ROUTINE migrate_data
+
+{
+*	Migrate any data
+*
+******************************************************************************}
+	DECLARE status
+	status = EMPTY
+
+	{***********************************************************************}
+	{* DM-5-2 Migrate                                                      *}
+	{* Convert file_size fields from bytes to KB                           *}
+	{* If we have data packages						                       *}
+	{***********************************************************************}
+	IF (haveDataPackages = TRUE) THEN
+		IF (fileSizeIsKb = FALSE) THEN
+			IF confirm_with_text ( "Click Yes to migrate the data in file size table fields, this action may take a while." ) THEN
+				status = InitNetUpgradeTools()
+				IF ( status = EMPTY ) THEN
+					ConvertFileSizeData("dm_data_package", "dm_data_package_id", "data_package_file_size")
+					ConvertFileSizeData("dm_data_package_file", "dm_data_package_file_id", "file_size")
+					ConvertFileSizeData("dm_data_item", "dm_data_item_id", "file_size")
+					fileSizeIsKb = TRUE
+				ENDIF
+			ENDIF
+		ENDIF
+	ELSE
+		{* New 5.2.0 set the flag to TRUE *}
+		fileSizeIsKb = TRUE
+	ENDIF
+
+	RETURN ( status )
+
+ENDROUTINE
+
+{*****************************************************************************}
+{*                      C O M P I L E   R E P O R T S                        *}
+{*****************************************************************************}
+
+ROUTINE compile_reports
+
+{
+*	Compile any reports/syntaxes/calculations/SFF
+*
+******************************************************************************}
+
+	DECLARE status
+	status = EMPTY
+
+	{***********************************************************************}
+	{* Ensure the new VGL reports are compiled                             *}
+	{***********************************************************************}
+
+	IF ( status = EMPTY ) THEN status = compile_report ( "$HELP_GAML_CVT"    ) ENDIF
+	IF ( status = EMPTY ) THEN status = compile_report ( "$HELP_DATAMANAGER" ) ENDIF
+
+	RETURN ( status )
+
+ENDROUTINE
+
+{*****************************************************************************}
+
+ROUTINE compile_report ( VALUE report )
+
+{
+*	Compile a report
+*
+******************************************************************************}
+
+	DECLARE status
+
+	IF ( vgl_compile_report_silent ( report ) )
+
+		status = EMPTY
+
+	ELSE
+
+		status = "Failed to compile VGL report " : report
+
+	ENDIF
+
+	RETURN ( status )
+
+ENDROUTINE
+
+{*****************************************************************************}
+{*                         HELPER ROUTINES                                   *}
+{*****************************************************************************}
+
+
+ROUTINE CheckExistingDataPackages
+
+{
+*	Check to see if data packages exist
+*
+******************************************************************************}
+	DECLARE status
+
+	status = SELECT dm_data_package.dm_data_package_id WHERE dm_data_package_id <> EMPTY
+
+	IF (status <> EMPTY) THEN
+		haveDataPackages = TRUE
+	ENDIF
+
+ENDROUTINE
+
+{*****************************************************************************}
+
+ROUTINE ReadDMGlobalTable
+
+{
+*	Read the dm_global table and values
+*
+******************************************************************************}
+	DECLARE status
+
+	IF valid_table("dm_global") THEN
+
+		status = SELECT dm_global.current_version WHERE current_version <> EMPTY 
+
+		IF ( status <> EMPTY ) THEN
+
+			fileSizeIsKb = SELECT dm_global.file_size_is_kb
+		ELSE
+
+			AddDMGlobalTableRow()
+
+		ENDIF
+
+	ENDIF
+
+ENDROUTINE
+
+{*****************************************************************************}
+
+ROUTINE AddDMGlobalTableRow
+
+{
+*	Add row to dm_global
+*
+******************************************************************************}
+	DECLARE addRowStmt
+
+	IF valid_table("dm_global") THEN
+
+		{* Add Row *}
+
+		IF (haveDataPackages = TRUE) THEN
+			addRowStmt = "INSERT INTO dm_global VALUES ('":currentVersion:"','F')"
+		ELSE
+			addRowStmt = "INSERT INTO dm_global VALUES ('":currentVersion:"','T')"
+		ENDIF
+
+		execute_sql ( addRowStmt)
+		execute_sql ( "commit")
+
+	ENDIF
+
+ENDROUTINE
+
+{*****************************************************************************}
+
+ROUTINE UpdateDMGlobalTable
+
+{
+*	Read the dm_global table and values
+*
+******************************************************************************}
+	DECLARE status
+
+	IF valid_table("dm_global") THEN
+
+		status = SELECT dm_global.current_version FOR UPDATE WHERE current_version <> EMPTY 
+
+		IF ( status <> EMPTY ) THEN
+
+			START WRITE TRANSACTION "dm_global"
+
+			ASSIGN dm_global.file_size_is_kb = fileSizeIsKb
+
+			UPDATE dm_global
+
+			COMMIT
+
+		ENDIF
+
+	ENDIF
+
+ENDROUTINE
+
+{*****************************************************************************}
+
+ROUTINE ConvertFileSizeData(VALUE table, VALUE idField, VALUE fileSizeField)
+
+{
+*	Change values in file size columns from bytes to kb
+*
+******************************************************************************}
+
+	DECLARE transaction_started, recordId, fileSize, kbVal
+
+	transaction_started = FALSE
+
+	recordId = SELECT 'table'.'idField' FOR UPDATE WHERE 'idField' <> EMPTY ORDER ON 'idField'
+
+	WHILE ((recordId <> EMPTY) & (recordId <> LOCKED)) DO
+		IF ( NOT transaction_started ) THEN
+			START WRITE TRANSACTION "dm_migrate"
+			transaction_started = TRUE
+		ENDIF
+		
+		fileSize = SELECT 'table'.'fileSizeField'
+
+		fileSize = fileSize / 1024
+
+		kbVal = upgradeNetTools.Ceiling(fileSize)
+
+		ASSIGN 'table'.'fileSizeField' = kbVal
+
+		UPDATE 'table'
+
+		recordId = SELECT 'table'.'idField' FOR UPDATE WHERE 'idField' > recordId
+
+	ENDWHILE
+
+	IF ( transaction_started ) THEN
+		COMMIT
+	ENDIF
+
+ENDROUTINE
+
+{*****************************************************************************}
+
+ROUTINE InitNetUpgradeTools
+
+{
+*	Routine to initialize the Upgrade Tools .NET component
+*
+******************************************************************************}
+
+	DECLARE status
+
+	{* Initialize .NET *}
+	CREATE OBJECT "STD_NET_SERVER", upgradeNetTools
+	status = upgradeNetTools.create ( G_UPGRADE_TOOLS_ASSEMBLY_NAME, G_UPGRADE_TOOLS_ASSEMBLY_CLASS, G_UPGRADE_TOOLS_ASSEMBLY_LOCATION )
+	RETURN ( status )
+
+ENDROUTINE
+
+{*****************************************************************************}

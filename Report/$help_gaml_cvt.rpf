@@ -1,0 +1,59 @@
+{*******************************************************************************
+*
+* Module Name   : $HELP_GAML_CVT
+*
+* Purpose       : General report to place GAML Converters help code.
+*
+* Document Ref. : N/a
+*
+*******************************************************************************}
+
+SET NOTPROTECTED
+SET NAME "DEFER/"
+
+SET COMPILE_OPTION DECLARE
+ENABLE WINDOWS
+
+JOIN STANDARD_LIBRARY STD_CLIENT
+JOIN STANDARD_LIBRARY STD_PROMPT
+
+JOIN LIBRARY $LIB_UTILS
+
+{******************************************************************************}
+
+
+{*******************************************************************************
+*                             M A I N   C O D E
+*******************************************************************************}
+
+help_gaml_converters_chm ("")
+
+{*******************************************************************************
+*                        G L O B A L    R O U T I N E S
+*******************************************************************************}
+
+{*******************************************************************************
+*                             R O U T I N E S
+*******************************************************************************}
+
+ROUTINE help_gaml_converters_chm( VALUE option )
+
+{ Calls the GAML Converters help file in the resource folder.
+*
+* Parameters   : option - menu procedure ( not used within routine )
+* Return Value : N/a
+*
+*******************************************************************************}
+
+	DECLARE client_name
+
+	client_name = client_registry_get_value( "HKEY_LOCAL_MACHINE", "SOFTWARE\Thermo\GRAMS Suite\Paths", "CommonFilesPath")
+	client_name = client_name : "\HelpFiles\Instrument Converters.chm"
+	prompt_help_gui_custom ( client_name , "")
+
+ENDROUTINE
+
+
+{******************************************************************************}
+{******************************************************************************}
+{******************************************************************************}

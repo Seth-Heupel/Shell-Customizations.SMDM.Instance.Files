@@ -1,0 +1,182 @@
+
+{*******************************************************************************
+*
+* Module Name  : $lit_calc_math
+*
+* Purpose      : Maths routines n
+*
+* Document Ref : 
+*
+* Portability  : Not Checked
+*
+* Re-entrant   : No
+*
+*******************************************************************************}
+
+JOIN STANDARD_LIBRARY STD_ARRAY     { size_of_array        }
+JOIN STANDARD_LIBRARY STD_GENERAL   { variable_is_assigned }
+JOIN STANDARD_LIBRARY STD_WINDOW    { window_set_status    }
+JOIN STANDARD_LIBRARY STD_UTILS
+
+JOIN LIBRARY $LIB_RE_FORMULA
+JOIN LIBRARY $LIB_UTILS             { flash_message        }
+
+JOIN LIBRARY $lib_unit
+
+
+{******************************************************************************}
+
+{******************************************************************************}
+
+ROUTINE get_delta_result ( self )
+
+{find component in first 2 tests, and report difference}
+
+
+DECLARE comps, sampObj,  sampId,   n,  tNum, resVal, resVal2, resString, resString2
+	,units
+
+    comps = self.get_parameter_text() { the component }
+  
+    
+    IF ( variable_is_assigned(self.context.resultobject) ) THEN
+
+        sampObj = self.context.resultobject.testobject.sampleobject
+        sampId = SELECT sample.id_numeric IN OBJECT sampObj
+        units = SELECT result.units IN OBJECT self.context.resultobject
+ 
+        n  = 0
+	resString = "NA"
+	resString2 = "NA"
+
+        IF ( comps != EMPTY ) THEN 
+
+
+                IF ( NOT BLANK (comps ) ) THEN 
+
+                    WriteToPrint(self,"Checking ":comps)
+                   
+                    tNum = SELECT samp_test_result.test_number
+                               WHERE id_numeric = sampId
+                               AND component_name = comps
+                               ORDER ON test_number
+                               
+                    WriteToPrint(self,"test1  ":tNum)
+                               
+                    IF ( tNum != EMPTY ) THEN
+                        
+                    	resVal = RESULT_VALUE(EMPTY,tNum,comps)
+                    	resString = RESULT_VALUE(EMPTY,tNum,comps)
+                    	
+			
+                                                        
+                        WriteToPrint(self,"resVal  ":resVal)
+                    ELSE 
+                    	resVal = "NA"
+                    	WriteToPrint(self,comps:" test ":tNum:" result not found")
+                            
+                    ENDIF
+                  
+                    NEXT samp_test_result
+			tNum = SELECT samp_test_result . test_number
+			resVal2 = RESULT_VALUE(EMPTY,tNum,comps)
+			resString2 = RESULT_VALUE(EMPTY,tNum,comps)
+			WriteToPrint(self,"test2  ":tNum)
+			WriteToPrint(self,"resVal2  ":resVal2)
+			
+
+   
+                ENDIF
+
+    		IF ( resVal != EMPTY ) THEN
+			   IF NUMTEXT(resString)
+
+                               WriteToPrint(self,"Using ":comps)
+
+                               WriteToPrint(self,"resValue1 ":resval)
+			       WriteToPrint(self,"resString ":resString	)
+			       
+			       IF ( units != SELECT samp_test_result.units ) THEN
+			       			
+			      		resVal = unit_convert(resVal,units,SELECT samp_test_result.units,error_status)
+			       		WriteToPrint(self,"Converting units from ":units:" to ":SELECT samp_test_result.units)
+				ENDIF
+                                                                
+                                    
+                              n = n + 1
+ 			   ELSE
+				WriteToPrint(self,comps:" result not found")
+			   ENDIF
+                                    
+                 ELSE
+                            
+                            WriteToPrint(self,comps:" test ":tNum:" result not found")
+                                
+                ENDIF
+                
+      		IF ( resVal2 != EMPTY ) THEN
+			   IF NUMTEXT(resString2)
+
+                               WriteToPrint(self,"Using ":comps)
+
+                               WriteToPrint(self,"resValue2 ":resval2)
+			       WriteToPrint(self,"resString2 ":resString2	)
+                               
+			       IF ( units != SELECT samp_test_result.units ) THEN
+			       			
+			      		resVal2 = unit_convert(resVal2,units,SELECT samp_test_result.units,error_status)
+			       		WriteToPrint(self,"Converting units from ":units:" to ":SELECT samp_test_result.units)
+				ENDIF
+                                                                
+                                    
+                              n = n + 1
+ 			   ELSE
+ 			   	resVal2="NA"
+				WriteToPrint(self,comps:" result2 not found")
+			   ENDIF
+                                    
+                 ELSE
+                            
+                            WriteToPrint(self,comps:" test ":tNum:" result not found")
+                                
+                ENDIF              
+            
+
+            IF ( n > 1 ) THEN
+		WriteToPrint(self,comps:" units ":units)
+                self.value = resVal - resVal2
+             {  self.value = unit_convert(resVal,units,SELECT samp_test_result.units,error_status) - unit_convert(resVal2,units,SELECT samp_test_result.units,error_status) }
+                self.units = units
+             
+
+
+                
+	    ELSE
+		self.value = resString
+		self.units = units
+		
+
+            ENDIF
+
+        ENDIF
+
+    ENDIF
+
+
+ENDROUTINE{ get_delta_result }
+
+{******************************************************************************}
+
+
+
+{******************************************************************************}
+ROUTINE WriteToPrint(self,VALUE txt)
+
+   { IF ( self.context.mode = FORMULA_MODE_PRINT ) THEN }
+
+        lib_re_formula_write_to_print_file(txt)
+        
+   { ENDIF }
+    
+ENDROUTINE
+{******************************************************************************}

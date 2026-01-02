@@ -1,0 +1,273 @@
+{******************************************************************************
+*
+* Module Name   : $MLPS_USER.RPF
+*
+* Purpose       : Routines to allow customisation of MLP comparison
+*
+* Document Ref. : SE/T/TVGL-WORK-REPORTS/1/3
+*
+* Specification : 
+*
+* Portability   : Not Checked
+*
+* Re-entrant    : 
+* Modifications  : GW01 9/9/2015 - mlps_user_level_fail
+* 		   GW02  01/05/2016 - email notification
+*******************************************************************************}
+
+SET NOTPROTECTED
+SET COMPILE_OPTION DECLARE
+
+JOIN LIBRARY $MLPS_CONST
+
+JOIN STANDARD_LIBRARY  STD_GENERAL
+JOIN STANDARD_LIBRARY STD_DATABASE   {GW01}
+JOIN LIBRARY LIT_EMAIL
+JOIN LIBRARY LIT_NOTIFICATION
+
+{CONSTANT RECIPIENT = "gary.walters@thermofisher.com,charlie.cayro@shell.com"}
+CONSTANT RECIPIENT = "smp$mlp_email"
+CONSTANT SENDER = "RAMAN.SQC@mzrpmdz.com"
+
+GLOBAL 
+
+ROUTINE mlps_user_pre_compare ( mlp_operation ,
+				mlp_component ,
+				limit         ,
+				level         )
+
+{
+*	Called before the comparison.
+*
+*
+******************************************************************************}	
+
+ENDROUTINE
+
+{*****************************************************************************}
+
+GLOBAL
+
+ROUTINE mlps_user_post_compare ( mlp_operation ,
+			         mlp_component ,
+				 limit         ,
+				 level         )
+
+{
+*	Called after the comparison.
+*
+*
+******************************************************************************}	
+
+ENDROUTINE
+
+{*****************************************************************************}
+
+GLOBAL 
+
+ROUTINE mlps_user_level_pass ( mlp_operation ,
+			       mlp_component ,
+			       limit         ,
+			       level         )
+
+{
+*	Called when a level passes. This routine is called after the standard
+*	level actions have been performed.
+*
+******************************************************************************}	
+
+ENDROUTINE
+
+{*****************************************************************************}
+
+GLOBAL 
+
+ROUTINE mlps_user_level_fail ( mlp_operation ,
+			       mlp_component ,
+			       limit         ,
+			       level         )
+
+{
+*	Called when a level fails. This routine is called after the standard
+*	level actions have been performed.
+*
+******************************************************************************}	
+{GW01}
+DECLARE { comp_name, maxl, minl,  res_Value, levelName , samp_id, prod ,body, crlf,}
+ table, type, plant, distList, ccList, key0   {GW02  for email notification}
+
+IF (TRANSACTION_IS_WRITE()) THEN
+        
+	ASSIGN result.m_oos IN OBJECT mlp_operation.result_row = TRUE 
+        AssignLimits("FAIL",limit,mlp_operation)
+
+{
+	samp_id = SELECT sample.id_numeric IN OBJECT mlp_operation.samplerow
+ 	prod = SELECT sample.product IN OBJECT mlp_operation.samplerow
+	crlf = ASCII(13) : ASCII(10)
+
+	res_value = SELECT result.raw_result IN OBJECT mlp_operation.resultrow
+    
+	comp_Name = SELECT mlp_components.Component_Name IN OBJECT mlp_component
+
+	maxl = limit.maxlimit
+	minl = limit.minlimit
+
+	levelName = level.Name
+
+
+	body = "Product: " :prod :crlf : "Sample: " : samp_Id : crlf: "Level: " : levelName : crlf : "Component: " :  comp_Name : crlf : "Result: " : res_Value : crlf : "Min limit: " : minl : crlf : "Max limit " : maxl 
+
+	SENDEMAIL ("MLP FAIL - " : samp_Id :" ":comp_Name : prod , LOGICAL(recipient), body , "" , sender)
+}
+       
+{GW02  for email notification}
+table = "TEST"
+key0 = get_key0_string (  table )
+type = "OOS"
+plant = ""
+distList = "gary.walters@thermo.com;charlie.cayro@shell.com"
+ccList = "gary.walters@thermofisher.com"
+NotificationQueue( key0, type, plant,  distList,  ccList) 
+{GW02}
+	
+
+ENDIF
+{GW01}	
+
+
+
+ENDROUTINE
+
+{*****************************************************************************}
+
+GLOBAL 
+
+ROUTINE mlps_user_schedule_valid ( mlp_header    ,
+			           mlp_schedule  ,	
+			           mlp_operation )
+			      
+
+{
+*	Called when finding the limits to compare a result. Allows control on
+*	where the mlp on a schedule is valid for the given sample,test,result. 
+*
+*
+******************************************************************************}	
+
+	RETURN ( TRUE )
+
+ENDROUTINE
+
+{*****************************************************************************}
+
+GLOBAL 
+
+ROUTINE mlps_user_level_valid ( mlp_header    ,
+			        mlp_level     ,
+			        mlp_operation )
+			      
+
+{
+*	Called when finding the limits to compare a result. Allows control on
+*	where the level is valid for the given sample,test,result. 
+*
+*
+******************************************************************************}	
+
+	RETURN ( TRUE )
+
+ENDROUTINE
+
+{*****************************************************************************}
+
+GLOBAL 
+
+ROUTINE mlps_user_read_level ( level )
+
+{
+*
+*
+******************************************************************************}
+
+ENDROUTINE			      
+
+{*****************************************************************************}
+
+GLOBAL 
+
+ROUTINE mlps_user_read_mlp_header_start ( mlp_header )
+
+{
+*
+*
+******************************************************************************}
+
+ENDROUTINE			      
+
+{*****************************************************************************}
+
+GLOBAL 
+
+ROUTINE mlps_user_read_mlp_header_end ( mlp_header )
+
+{
+*
+*
+******************************************************************************}
+
+ENDROUTINE			      
+
+{*****************************************************************************}
+
+GLOBAL 
+
+ROUTINE mlps_user_read_mlp_level (       mlp_header ,
+				   VALUE position   )
+
+{
+*
+*
+******************************************************************************}
+
+ENDROUTINE			      
+
+{*****************************************************************************}
+
+GLOBAL 
+
+ROUTINE mlps_user_read_mlp_schedule (       mlp_header ,
+				      VALUE count      )
+
+{
+*
+*
+******************************************************************************}
+
+ENDROUTINE
+
+{ CHG001 Begin }
+
+ROUTINE AssignLimits(VALUE ftype,limit, mlp_operation)
+
+DECLARE fmin, fmax
+
+ 
+    fmin = "M_":ftype:"_min"
+    fmax = "M_":ftype:"_max"
+    
+    IF ( variable_is_assigned(limit.min_limit) ) THEN
+    
+        ASSIGN result.'fmin' IN OBJECT mlp_operation.result_row = limit.min_limit
+    
+    ENDIF
+    
+    IF ( variable_is_assigned(limit.max_limit) ) THEN
+    
+        ASSIGN result.'fmax' IN OBJECT mlp_operation.result_row = limit.max_limit
+    
+    ENDIF
+    
+ENDROUTINE
+
+{ CHG001 End }			      

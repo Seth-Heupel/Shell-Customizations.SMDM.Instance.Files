@@ -1,0 +1,240 @@
+{*****************************************************************************
+*
+* Module Name   : LIT_EMAIL
+*
+* Purpose       : Routines to send e-mails using the .Net framework SMTP class
+*                 
+*
+* Portability   : All platforms
+*
+* Document Ref. : CS/T/
+*
+* Re-entrant    : No
+*
+* Specification :
+*
+******************************************************************************
+* Modification History
+*
+* Version   Date        Author           Modify Details
+******************************************************************************
+* 1.0       20.Dec.2007 Barry Hamilton   Created
+******************************************************************************}
+{* GW 9/9/2015 - added Shell constants}
+SET NOTPROTECTED
+SET COMPILE_OPTION DECLARE
+ENABLE WINDOWS
+SET NAME "DEFER/"
+
+
+CONSTANT DESTINATION_OVERRIDE=""
+
+JOIN STANDARD_LIBRARY STD_PROMPT
+JOIN STANDARD_LIBRARY STD_CLIENT
+JOIN LIBRARY $lib_utils
+
+flash_message(SendEmail("Test","gary.walters@thermofisher.com","","","gary.walters@thermofisher.com"),TRUE)
+
+{
+flash_message(SendEmail("SampleManager smtp distribution list test e-mail","pbitdept@fhr.com","","",""),TRUE)
+}
+
+CONSTANT DEFAULT_FROM = "RAMAN.SQC@mzrpmdz.com"
+{
+    The name of a valid network server that processes SMTP mail messages.
+}
+CONSTANT EMAIL_SERVER = "138.57.54.194"
+ 
+
+GLOBAL ROUTINE SendEmail(VALUE subject, VALUE recipient, VALUE body, VALUE fileAttach, VALUE sender)
+
+DECLARE mail, status, logic
+
+    CREATE OBJECT "STD_NET_SERVER", mail
+
+    mail.create("smtpmail","smtpmail.Mail","Custom")
+
+    IF ( BLANK ( sender ) ) THEN
+
+        mail.sender = DEFAULT_FROM
+
+    ELSE
+
+        mail.sender = sender
+
+    ENDIF
+
+    IF (NOT BLANK(DESTINATION_OVERRIDE)) THEN
+    
+        mail.recipient = DESTINATION_OVERRIDE
+        mail.body = "Destination Override(":recipient:") original recipient.":ASCII(13):body
+        
+    ELSE
+        
+        mail.recipient = recipient
+        mail.body = body
+        
+    ENDIF
+    
+    mail.subject = subject
+    mail.server = EMAIL_SERVER
+
+    IF ( NOT BLANK ( fileAttach ) ) THEN
+
+        IF ( FILE EXISTS(fileAttach)) THEN
+
+            IF ( INDEX(fileAttach,"SMP$") != 0 ) THEN
+            
+                logic = SUBSTRING(fileAttach,1,INDEX(fileAttach,":")-1)
+                                
+                fileAttach = fileAttach # logic # ":"
+
+                fileAttach = lib_utils_logical_to_string(logic):"\":fileAttach
+                
+
+            ENDIF
+            
+            mail.AttachFile(fileAttach)
+
+        ENDIF
+
+    ENDIF
+
+    status = mail.SendMessage()
+
+    RETURN ( status )
+    
+ENDROUTINE
+
+GLOBAL ROUTINE destination_user_email_prompt ( prompt_details )
+
+    PROMPT OBJECT prompt_details
+    BROWSE ON TEXT
+    
+ENDROUTINE
+
+GLOBAL ROUTINE destination_user_email_net ( VALUE file_name     ,
+                                VALUE param         ,
+                                VALUE printer_codes )
+
+DECLARE status, file_base, subj
+
+    IF ( INDEX(param,",") > 0 ) THEN
+    
+        subj = RIGHTSTRING(param,LENGTH(param)-INDEX(param,","))
+        param = LEFTSTRING(param,INDEX(param,",")-1)
+   
+    ELSE
+    
+        subj = "SMW Report"
+        
+    ENDIF
+
+    IF (FILE EXISTS ( file_name ))
+        
+        file_base = SUBSTRING(file_name,1,INDEX(file_name,".tmp"))
+        
+        file_base = file_base:"txt"
+        
+        FILE COPY file_name, file_base
+        
+        status = SendEmail(subj,param,"",file_base,"")
+                
+        FILE DELETE file_base
+
+        IF (GLOBAL ( "MODE" ) = "INTERACTIVE" ) THEN
+
+            IF ( status = "Success" ) THEN
+
+                RETURN ( "Report has been mailed to " : param )
+
+            ELSE
+
+                RETURN ( "Error:  ":status)
+
+            ENDIF
+
+        ENDIF
+
+    ENDIF
+    
+ENDROUTINE
+{***********************************************************************************
+
+    Internal Routine to generate an e-mail prompt form, and send the e-mail
+    if the user presses OK
+    
+************************************************************************************}
+GLOBAL ROUTINE EmailForm (VALUE title, VALUE sender, VALUE recip, VALUE subject, VALUE body)
+
+DECLARE form, status, pFrom, pTo, pSub, pBody
+
+    IF ( BLANK(sender) ) THEN
+    
+        sender = DEFAULT_FROM
+        
+    ENDIF
+    
+    CREATE OBJECT "STD_FORM" , form
+    
+    form.height = 10
+    form.width = 60
+    form.row = 8
+    form.column = 8
+    form.header = title
+    form.vgl_library=GLOBAL ("CURRENT_LIBRARY")
+    form.button_style = FORM_BUTTON_OK_CANCEL
+
+    { Recipient }
+    
+    PROMPT OBJECT pTo
+    ON LINE 1 FROM 10
+    WITH ( value = recip )
+    
+    form.add_prompt(pTo)
+    form.add_display("To:",1,1,PROMPT_RENDITION_RAISED)
+    
+    { Sender }
+    
+    PROMPT OBJECT pFrom
+    ON LINE 2 FROM 10
+    WITH ( value = sender )
+    
+    form.add_prompt(pFrom)
+    form.add_display("From:",1,2,PROMPT_RENDITION_RAISED)
+
+    { Subject }
+    
+    PROMPT OBJECT pSub
+    ON LINE 3 FROM 10
+    WITH ( value = subject )
+    
+    form.add_prompt(pSub)
+    form.add_display("Subject:",1,3,PROMPT_RENDITION_RAISED)
+
+    { Body }
+    
+    PROMPT OBJECT pBody
+    ON LINE 5 FROM 1
+    WITH ( value = body, height=4 )
+    
+    form.add_prompt(pBody)
+    {form.add_display("Body",1,6,PROMPT_RENDITION_RAISED)}
+
+    form.start_prompt()
+    form.wait_prompt()
+    form.end_prompt()
+    
+    IF ( form.get_lastkey() = "DO" ) THEN
+
+        status = SendEmail(pSub.value,pTo.value,pBody.value,"",pFrom.value)
+    
+        IF (status != "Success") THEN
+
+            client_message_box(status,"E-Mail Send Failure",MB_ICONERROR+MB_OK)
+
+        ENDIF
+
+    ENDIF
+    
+ENDROUTINE

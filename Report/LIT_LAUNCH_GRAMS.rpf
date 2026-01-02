@@ -1,0 +1,60 @@
+{*****************************************************************************
+*
+* Module Name   : LIT_LAUNCH_GRAMS.RPF
+*
+* Purpose       : Launch GRAMS IQ file from .net or Windows explorer
+*
+* Portability   : Not Tested
+*
+* Document Ref. :
+*
+* Re-entrant    : No
+*
+* Specification :
+*
+******************************************************************************
+* Modification History
+*
+* Version   Date        Author           Modify Details
+******************************************************************************
+* 1.0       05/25/2016  G.W. Walters    Created
+* 1.1 	    06/01/2016			Launch windows explorer folder instead  of GRAMS
+******************************************************************************}
+
+SET NOTPROTECTED
+SET COMPILE_OPTION DECLARE
+ENABLE WINDOWS
+SET NAME "DEFER/"
+JOIN STANDARD_LIBRARY STD_DDE
+JOIN LIBRARY $LIB_UTILS
+
+{constant exe = "C:\Program Files (x86)\Thermo\GRAMS Suite\GRAMSIQ\GRAMSIQ.exe "}
+constant exe = "Explorer.exe "
+{LAUNCH_GRAMS("C:\GRAMS_CAL\CGH-CGH Product (Hydrotrtd LCC)\Motor Octane Number")}
+
+{Main}
+{LAUNCH_GRAMS("C:\TEMP")
+Exit}
+
+
+ROUTINE LAUNCH_GRAMS(VALUE FILE_STRING)
+
+
+  declare status, launch_path
+  launch_path = exe : FILE_STRING
+ 
+{  dde_winexec(launch_path, "SW_SHOW" , status )}
+dde_winexec(launch_path, "SW_SHOW" , status )
+{dde_winexec("c:\windows\notepad.exe c:\results\results.txt", "SW_SHOW" , status ) }
+
+{ flash_message ( "lit_launch_grams" : "path  " : launch_path : " " :
+    			 " ", TRUE ) }
+
+{
+.net 
+  string tdfxFile = m_DirNameComp + "\\" + FindFileName(m_DirNameComp) + ".tdfx";
+   Library.VGL.RunVGLRoutineInteractive("LIT_LAUNCH_GRAMS", "LAUNCH_GRAMS", "\"" +tdfxFile + "\"");
+}
+ENDROUTINE 
+
+

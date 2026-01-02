@@ -1,0 +1,230 @@
+{*****************************************************************************
+*
+* Module Name   : LIT_TABLE_LOAD.RPF
+*
+* Purpose       : The purpose of this program is to parse the delmited file from LIT_LOAD_REMOTE
+*                 and place all valid results into the upload_result_queue table.
+*
+* Portability   : Not Tested
+*
+* Document Ref. :
+*
+* Re-entrant    : No
+*
+* Specification :
+*
+* Set reg key $CSVIMPORT , import files to here
+******************************************************************************
+* Modification History
+*
+* Version   Date        Author           Modify Details
+******************************************************************************
+* 1.0       12/01/2004  Barry Hamilton   Created
+*Modifications
+* 	      7/10/2015  Gary Walters   use date and table name  for  log name
+******************************************************************************}
+
+SET NOTPROTECTED
+
+SET COMPILE_OPTION DECLARE
+ENABLE WINDOWS
+SET NAME "DEFER/"
+
+
+JOIN STANDARD_LIBRARY STD_DATABASE
+JOIN LIBRARY LIT_TABLE_LOADSAVLIB
+
+{ Setup and load configuration parameters }
+
+DECLARE INPUT_DIR, INPUT_EXTENSION, OUTPUT_LOG_FILE,
+        DELETE_PROCESSED_FILES, OUTPUT_EXTENSION
+
+
+ProcessMain()
+ROUTINE ProcessMain
+
+DECLARE f_name, log_file, counter, status, found_files, new_file, date_now, tablog
+
+
+INPUT_DIR = "SMP$CSVIMPORT:"
+INPUT_EXTENSION = ".CSV"
+OUTPUT_LOG_FILE = "LOAD"
+OUTPUT_EXTENSION = ".DONE"
+DELETE_PROCESSED_FILES = FALSE
+
+
+date_now = NOW
+date_now = SUBSTITUTE ( date_now, "/", "_" )
+date_now = SUBSTITUTE ( date_now, " ", "_" )
+date_now = SUBSTITUTE ( date_now, ":", "_" )
+date_now = SUBSTITUTE ( date_now, ".", "_" )
+
+tablog = "table"
+
+
+    { Get the file specification for the search }
+
+    f_name = INPUT_DIR:"*":INPUT_EXTENSION
+
+    { Get the log file name for the parsing background }
+
+   { log_file = "SMP$LOGFILES:":OUTPUT_LOG_FILE : date_now:".LOG"}
+	{ some routine in lit_Table-Loadsavlib is clearing the log 
+		so make a new one for each file }
+
+    FILE FIND f_name, found_files, status
+
+    IF ( status = EMPTY ) THEN
+
+        counter = 1
+
+        { Parse each found file }
+
+        WHILE ( found_files[counter] <> EMPTY ) DO
+
+          IF (INDEX ( found_files[counter], "sample" ) > 0 ) THEN 
+             tablog = "sample"
+          ENDIF
+          IF ( INDEX ( found_files[counter], "test" ) > 0 ) THEN 
+             tablog = "test"
+          ENDIF
+          IF ( INDEX ( found_files[counter], "result" ) > 0 ) THEN 
+             tablog = "result"
+          ENDIF
+	  IF ( INDEX ( found_files[counter], "sample_point" ) > 0 ) THEN 
+             tablog = "sample_point" 
+          ENDIF
+        
+
+
+          log_file = "SMP$LOGFILES:":OUTPUT_LOG_FILE : date_now:tablog:".LOG"
+
+            ParseLog(log_file,"Processing ":found_files[counter])
+
+            { Call in NEW CONTEXT so if the parse crashes for any reason it won't
+              kill the processing of any other files. }
+
+            FILE CLOSE log_file 
+            CALL_ROUTINE "ProcessFile" IN LIBRARY "LIT_TABLE_LOAD"
+            USING found_files[counter], log_file RETURNING status NEW CONTEXT
+
+            { Status of EMPTY means the parsing routine crashed or errored out. }
+
+            IF ( (status <> EMPTY) AND (status = "OK") ) THEN
+
+                { Delete the file if the configuration says so }
+
+                IF (NOT DELETE_PROCESSED_FILES) THEN
+
+                    { Get the new file for the rename }
+
+                    new_file = LEFTSTRING(found_files[counter],
+                               LENGTH(found_files[counter])-LENGTH(INPUT_EXTENSION))
+                               :OUTPUT_EXTENSION
+
+                    FILE COPY found_files[counter], new_file, status
+
+                    IF ( status <> EMPTY ) THEN
+
+                        ParseLog(log_file,"Error Creating backup file: ":status)
+
+                    ENDIF
+
+                ENDIF
+
+                { Even if the file is saved, it was copied by now, so delete }
+
+                FILE DELETE found_files[counter], status
+
+                IF ( status <> EMPTY ) THEN
+
+                    ParseLog(log_file,"Error deleting file: ":status)
+
+                ENDIF
+
+            ELSE
+
+                { The parsing routine crashed or errored on the file, so rename it to
+                  a .ERR so the loop won't keep trying to process it. }
+
+                new_file = LEFTSTRING(found_files[counter],
+                           LENGTH(found_files[counter])-LENGTH(INPUT_EXTENSION))
+                           :".ERR"
+
+                FILE COPY found_files[counter], new_file
+                FILE DELETE found_files[counter]
+
+                ParseLog(log_file,"Error processing ":found_files[counter]:" ":status)
+
+            ENDIF
+
+            counter = counter + 1
+
+        ENDWHILE
+
+    ELSE
+
+        ParseLog(log_file,"Error opening file ":f_name:" ":status)
+
+    ENDIF
+
+ { FILE CLOSE log_file }
+
+ENDROUTINE
+
+
+{********************************************************************************************
+
+    Routine which actually parses the Atlas file, and inserts all data into the upload queue.
+
+*********************************************************************************************}
+ROUTINE ProcessFile ( VALUE f_name, VALUE logFile)
+
+DECLARE status, theOption
+
+                       
+    IF ( INDEX(f_name, "OVERWRITE" ) != 0 ) THEN
+
+            the_option = OVERWRITE_TABLE
+
+    ELSEIF ( INDEX(f_name, "ERASE" ) != 0 ) THEN
+
+            the_option = WIPE_TABLE
+
+    ELSE
+
+            the_option = IGNORE_FILE
+
+    ENDIF
+
+
+    status = input_csv_file_with_log ( f_name, theOption,FALSE,1,FALSE,logFile)
+
+    IF ( INDEX(status,"with no errors") != 0 ) THEN
+    
+        RETURN ( "OK" )
+        
+    ELSE
+    
+        RETURN ( status )
+        
+    ENDIF
+    
+ENDROUTINE
+
+{********************************************************************************************
+
+    Routine to log information to logfiles
+
+*********************************************************************************************}
+ROUTINE ParseLog ( VALUE l_file, VALUE text )
+
+    FILE EXTEND l_file
+
+    FILE WRITE l_file, NOW:text
+
+	FILE CLOSE l_file
+
+ENDROUTINE
+
+

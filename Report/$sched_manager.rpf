@@ -1,0 +1,3067 @@
+{*******************************************************************************
+*
+* Module Name   : $SCHED_MANAGER.RPF
+*
+* Purpose       : Task recurrence in SampleManager
+*
+* Portability   : Not Checked
+*
+* Re-entrant    :
+*
+* 4.Aug.2015   : Added description field to the timerqueue table.
+* Barry Hamilton
+* CHG001
+* 10.Sep.2015  :  change order for insert_reports to description
+* Gary Walters
+* CHG002
+*******************************************************************************}
+
+JOIN STANDARD_LIBRARY STD_PROMPT
+JOIN STANDARD_LIBRARY STD_ARRAY
+JOIN STANDARD_LIBRARY STD_VGL
+JOIN STANDARD_LIBRARY STD_CLIENT
+JOIN STANDARD_LIBRARY STD_BROWSE
+JOIN STANDARD_LIBRARY STD_MESSAGE
+
+JOIN LIBRARY $PROMPT_TAB
+JOIN LIBRARY $LIB_UTILS
+JOIN LIBRARY $LIB_TIME
+JOIN LIBRARY $PROMPT_LIST
+JOIN LIBRARY $BSMP_LIB
+JOIN LIBRARY $TASK
+
+SET COMPILE_OPTION DECLARE
+SET NAME "DEFER/"
+SET NOTPROTECTED
+ENABLE WINDOWS
+
+{* Local Constants ************************************************************}
+
+{********************}
+{* Scheduling Modes *}
+{********************}
+
+GLOBAL CONSTANT REP_SCHED               = 1
+GLOBAL CONSTANT LOG_SCHED               = 2
+
+CONSTANT LOGIN_TEXT                     = "Login"
+CONSTANT REPORT_TEXT                    = "Report"
+CONSTANT TASK_TEXT                      = "Task"
+
+{******************}
+{* Prompt Objects *}
+{******************}
+
+CONSTANT REPORT_NAME                    = 1
+CONSTANT ROUTINE_NAME                   = 2
+CONSTANT PARAM_NAME                     = 3
+CONSTANT PRINTER_NAME                   = 4
+CONSTANT SUSPENDED                      = 5
+CONSTANT USER_NAME                      = 6
+CONSTANT STARTING_DATE                  = 7
+CONSTANT NO_END_DATE                    = 8
+CONSTANT END_AFTER_DATE                 = 9
+CONSTANT AFTER_OCCUR                    = 10
+CONSTANT END_BY_DATE                    = 11
+CONSTANT ENDING_DATE                    = 12
+CONSTANT RUN_WIN_CHECK_BOX              = 13
+CONSTANT RUN_WIN_VALUE                  = 14
+CONSTANT OK_BUTTON                      = 15
+CONSTANT HELP_BUTTON                    = 16
+CONSTANT CANCEL_BUTTON                  = 17
+CONSTANT DESCRIPTION_PROMPT             = 18 { CHG001 }
+CONSTANT TAB_FORMS                      = 19
+CONSTANT TASK                           = 20
+CONSTANT TASK_PARAMS                    = 21
+CONSTANT RADIO_VGL                      = 22
+CONSTANT RADIO_DOTNET                   = 23
+{ CHG001
+CONSTANT TAB_FORMS                      = 18
+CONSTANT TASK                           = 19
+CONSTANT TASK_PARAMS                    = 20
+CONSTANT RADIO_VGL          = 21
+CONSTANT RADIO_DOTNET           = 22
+}
+{*******************************}
+{* Prompt Objects on Daily Tab *}
+{*******************************}
+
+CONSTANT DAY_RADIO_1                    = 1
+CONSTANT DAY_PROMPT_1                   = 2
+CONSTANT DAY_RADIO_2                    = 3
+
+{********************************}
+{* Prompt Objects on Weekly Tab *}
+{********************************}
+
+CONSTANT WEEK_PROMPT_1                  = 1
+
+{*********************************}
+{* Prompt Objects on Monthly Tab *}
+{*********************************}
+
+CONSTANT MONTH_RADIO_1                  = 1
+CONSTANT MONTH_PROMPT_1                 = 2
+CONSTANT MONTH_PROMPT_2                 = 3
+CONSTANT MONTH_RADIO_2                  = 4
+CONSTANT MONTH_LIST_1                   = 5
+CONSTANT MONTH_LIST_2                   = 6
+CONSTANT MONTH_PROMPT_3                 = 7
+                
+{********************************}
+{* Prompt Objects on Yearly Tab *}
+{********************************}
+
+CONSTANT YEAR_RADIO_1                   = 1
+CONSTANT YEAR_LIST_1                    = 2
+CONSTANT YEAR_PROMPT_1                  = 3
+CONSTANT YEAR_RADIO_2                   = 4
+CONSTANT YEAR_LIST_2                    = 5
+CONSTANT YEAR_LIST_3                    = 6
+CONSTANT YEAR_LIST_4                    = 7
+
+{***********************************}
+{* Prompt Objects on Frequency Tab *}
+{***********************************}
+
+CONSTANT FREQ_RADIO_1                   = 1
+CONSTANT FREQ_PROMPT_1                  = 2
+CONSTANT FREQ_RADIO_2                   = 3
+CONSTANT FREQ_PROMPT_2                  = 4
+
+{*****************}             
+{* Choice Arrays *}
+{*****************}
+
+CONSTANT NO_DAY_CHOICES                 = 10
+CONSTANT NO_WEEK_CHOICES                = 5
+CONSTANT NO_MONTH_CHOICES               = 12
+CONSTANT NO_INT_CHOICES                 = 19
+
+{********************}
+{* Screen Positions *}
+{********************}
+
+CONSTANT SCHED_MNGR_FORM_HEIGHT         = 12
+CONSTANT SCHED_MNGR_FORM_WIDTH          = 77
+CONSTANT SCHED_MNGR_FORM_COLUMN         = 10
+CONSTANT SCHED_MNGR_FORM_ROW            = 3
+
+CONSTANT LIST_ROW                       = 1
+CONSTANT LIST_COLUMN                    = 2
+CONSTANT LIST_WIDTH                     = 59
+CONSTANT LIST_HEIGHT                    = 9
+
+CONSTANT LIST_COLUMN_1_WIDTH            = 0
+CONSTANT LIST_COLUMN_2_WIDTH            = 5
+CONSTANT LIST_COLUMN_3_WIDTH            = 12
+CONSTANT LIST_COLUMN_4_WIDTH            = 13
+CONSTANT LIST_COLUMN_5_WIDTH            = 7     
+
+CONSTANT SCHED_MNGR_FORM_BUTTON_WIDTH   = 12
+CONSTANT SCHED_MNGR_FORM_BUTTON_COLUMN  = 65
+
+CONSTANT SCHED_MNGR_FORM_LIST           = 1
+CONSTANT SCHED_MNGR_FORM_EDIT_BUTTON    = 3
+CONSTANT SCHED_MNGR_FORM_REMOVE_BUTTON  = 4
+
+CONSTANT TASK_FORM_HEIGHT               = 20
+CONSTANT TASK_FORM_WIDTH                = 72 
+CONSTANT TASK_FORM_COLUMN               = 6
+CONSTANT TASK_FORM_ROW                  = 3
+
+CONSTANT TASK_FORM_REPORT_DIVIDE        = 37
+CONSTANT TASK_FORM_RANGE_RECCUR_DIVIDE  = 30
+CONSTANT TASK_FORM_RANGE_RECCUR_HEIGHT  = 4
+
+CONSTANT TAB_HEIGHT                     = 7
+CONSTANT TAB_ROW                        = 9
+CONSTANT TAB_COLUMN                     = 3
+
+CONSTANT START_TAB_COLUMN               = 2
+CONSTANT RANGE_RECCUR_POS               = 35 { 30 CHG001  }
+CONSTANT RANGE_RECCUR_HEIGHT            = 4
+CONSTANT BUTTON_WIDTH                   = 10
+CONSTANT BUTTON_GAP                     = 3
+CONSTANT NO_OF_COLUMNS                  = 5
+CONSTANT NO_OF_BUTTONS                  = 6
+
+CONSTANT DEL_RADIO                      = 8
+CONSTANT SUSP_RADIO                     = 9
+
+CONSTANT PROMPT_WIDTH           = 16
+
+{*********************}
+{* Selection Options *}
+{*********************}
+
+CONSTANT DAY_STYLE_1   = 1
+CONSTANT DAY_STYLE_2   = 2
+CONSTANT WEEK_STYLE    = 3
+CONSTANT MONTH_STYLE_1 = 4
+CONSTANT MONTH_STYLE_2 = 5
+CONSTANT YEAR_STYLE_1  = 6
+CONSTANT YEAR_STYLE_2  = 7
+
+{*************************}
+{* Alternative Libraries *}
+{*************************}
+
+CONSTANT REPORT_LIBRARY                 = "$BSMP_REPT"
+CONSTANT REPORT_ROUTINE                 = "bsmpreptgeneration"
+CONSTANT SAMPLE_LOGIN_LIBRARY           = "$BSMP_LSCH"
+CONSTANT SAMPLE_LOGIN_ROUTINE           = "$bsmplschsubmit"
+
+{*************}
+{* Help ID's *}
+{*************}
+
+CONSTANT SCHED_MNGR_HELP_NAME           = "Schedule Manager"
+CONSTANT REP_SCHED_HELP_NAME            = "Scheduling a report"
+CONSTANT LOG_SCHED_HELP_NAME            = "Scheduling Sample Logins"
+
+{***********}
+{* General *}
+{***********}
+
+CONSTANT NONE                           = "<none>"
+CONSTANT NOTHING                        = ""
+CONSTANT SPACE                          = " "
+
+{* Main Code ******************************************************************}
+
+        sched_manager_create_form ( )
+
+{* Start Of Routines **********************************************************}
+
+{******************************************************************************}
+
+        GLOBAL
+
+        ROUTINE sched_manager_create_form
+
+{
+*
+*
+*******************************************************************************}
+
+        DECLARE sched_mngr_form , button , list , count , callbacks ,
+                col_widths , delete_expired , suspend_expired
+
+
+        ARRAY callbacks  ARRAYSIZE ( NO_OF_BUTTONS )
+        ARRAY col_widths ARRAYSIZE ( NO_OF_COLUMNS )
+
+        callbacks [ 1 ] = "sched_manager_new"
+        callbacks [ 2 ] = "sched_manager_new"
+        callbacks [ 3 ] = "sched_manager_edit"
+        callbacks [ 4 ] = "sched_manager_remove"
+        callbacks [ 5 ] = "sched_manager_help"
+        callbacks [ 6 ] = "EXIT"
+
+        col_widths [ 1 ] = LIST_COLUMN_1_WIDTH
+        col_widths [ 2 ] = LIST_COLUMN_2_WIDTH
+        col_widths [ 3 ] = LIST_COLUMN_3_WIDTH
+        col_widths [ 4 ] = LIST_COLUMN_4_WIDTH
+        col_widths [ 5 ] = LIST_COLUMN_5_WIDTH
+
+        set_up_std_prompt_list_class ( )
+        set_up_std_prompt_tab_class ( )
+
+        CREATE OBJECT "STD_FORM" , sched_mngr_form
+
+        sched_mngr_form . header           =
+                        GET_USER_MESSAGE ( "SCHED_MANAGER_FORM_HEADER" , 1 )
+        sched_mngr_form . height           = SCHED_MNGR_FORM_HEIGHT
+        sched_mngr_form . width            = SCHED_MNGR_FORM_WIDTH
+        sched_mngr_form . column           = SCHED_MNGR_FORM_COLUMN
+        sched_mngr_form . row              = SCHED_MNGR_FORM_ROW
+        sched_mngr_form . button_style     = FORM_BUTTON_NONE
+        sched_mngr_form . return_behaviour = FORM_RETURN_STAY
+
+        CREATE OBJECT PROMPT_LIST_CLASS, list
+
+        list . row                  = LIST_ROW
+        list . column               = LIST_COLUMN
+        list . width                = LIST_WIDTH
+        list . height               = LIST_HEIGHT
+        list . right_mouse_routine  = "sched_manager_list_right_mouse"
+        list . double_click_routine = "sched_manager_edit"
+
+        count = 0
+        REPEAT
+                count = count + 1
+                list . add_column (
+                        GET_USER_MESSAGE ( "SCHED_MANAGER_LIST_COLUMN" ,
+                                           count                       ) ,
+                        col_widths [ count ]                             )
+
+        UNTIL count = NO_OF_COLUMNS
+
+{ CHG001 } list.add_column("Description",40)
+        sched_mngr_form . add_frame (
+                GET_USER_MESSAGE ( "SCHED_MANAGER_BACK_SCHEDULES" , 1 ) ,
+                1                                                       ,
+                1                                                       ,
+                list . height + 2                                       ,
+                list . width + 2                                        )
+
+        sched_mngr_form . add_prompt ( list )
+
+        count = 0
+        REPEAT
+                count = count + 1
+
+                PROMPT OBJECT button
+                CLASS "STD_PROMPT_BUTTON"
+                WITH (  caption = GET_USER_MESSAGE (
+                                  "SCHED_MANAGER_BUTTON_CAPTION" , count ) ,
+                        width   = SCHED_MNGR_FORM_BUTTON_WIDTH             ,
+                        column  = SCHED_MNGR_FORM_BUTTON_COLUMN            ,
+                        row     = ( count * 2 ) - 1                        )
+                IF count < ( NO_OF_BUTTONS ) THEN
+                        button . mouse_click_routine = callbacks [ count ]
+                ELSE
+                        button . send_lastkey = callbacks [ count ]
+                ENDIF
+                IF count <= 2 THEN
+                        button . user_info = count      
+                ENDIF
+
+                IF count = 5 THEN
+                        button . user_info = SCHED_MNGR_HELP_NAME
+                ENDIF
+
+                sched_mngr_form . add_prompt ( button )
+
+        UNTIL count = NO_OF_BUTTONS
+
+        PROMPT OBJECT delete_expired
+                BROWSE ON BOOLEAN
+                AT 4 , 11
+                WITH ( is_radio = TRUE                                 ,
+                       value    = GLOBAL ( "SCHEDULE_DELETE_EXPIRED" ) ,
+                       toggled_routine = "delete_radio"                ,
+                       caption = GET_USER_MESSAGE ( "SCHED_MANAGER_DEL_EXP", 1 ))
+
+        sched_mngr_form . add_prompt ( delete_expired )
+
+        PROMPT OBJECT suspend_expired
+                BROWSE ON BOOLEAN
+                AT 31 , 11
+                WITH ( is_radio = TRUE                                         ,
+                       value    = NOT ( GLOBAL ( "SCHEDULE_DELETE_EXPIRED" ) ) ,
+                       toggled_routine = "suspend_radio"                       ,
+                       caption = GET_USER_MESSAGE ( "SCHED_MANAGER_SUSP_EXP", 1 ) )
+
+        sched_mngr_form . add_prompt ( suspend_expired )
+
+        sched_mngr_form . start_prompt ( )
+        sched_manager_insert_reports ( list )
+        sched_mngr_form . wait_prompt ( )
+        sched_mngr_form . end_prompt ( )
+
+ENDROUTINE { create_form }
+
+{******************************************************************************}
+
+        ROUTINE sched_manager_new ( self )
+
+{
+*
+*
+*******************************************************************************}
+
+        self . parent_prompt . user_info = self . user_info
+        sched_manager_task_scheduler ( self . parent_prompt , EMPTY )
+
+ENDROUTINE { sched_manager_new }
+
+{******************************************************************************}
+
+        ROUTINE sched_manager_edit ( self )
+
+{
+*
+*
+*******************************************************************************}
+
+        DECLARE temp , item , mode , form
+
+        form = self . parent_prompt
+
+        item = form.
+               prompt_objects [ SCHED_MNGR_FORM_LIST ] .
+               get_first_selected ( temp )
+
+        mode = form .
+               prompt_objects [ SCHED_MNGR_FORM_LIST ] .
+               get_item ( item , 1 )
+
+        IF mode = LOGIN_TEXT THEN
+                form . user_info = LOG_SCHED
+        ELSEIF ( mode = REPORT_TEXT ) OR ( mode = TASK_TEXT ) THEN
+                form . user_info = REP_SCHED
+        ENDIF
+
+        IF sched_manager_check_item_exists ( temp , FALSE ) THEN
+
+                sched_manager_task_scheduler ( form , temp )
+        ELSE
+                flash_message ( GET_USER_MESSAGE (
+                                "SCHED_MANAGER_NO_SELECTION" , 1 ) , TRUE )
+        ENDIF
+
+ENDROUTINE { sched_manager_edit }
+
+{******************************************************************************}
+
+        ROUTINE sched_manager_delete_entry ( VALUE entry_number )
+
+{
+*
+*   Check if the entry to delete is a login schedule. If it is ask if the
+*   user wants to delete all the entries for this login schedule otherwise
+*   just delete this specific record.
+*
+*******************************************************************************}
+
+    DECLARE delete_id,
+            delete_schedule,
+            message_ptr,
+            read_time
+
+    delete_id = SELECT timerqueue . entry_id
+                WHERE  entry_number  = entry_number
+
+    IF delete_id <> EMPTY THEN
+
+        read_time = GLOBAL ("READ_TIME" )
+        SET GLOBAL "READ_TIME" TO 0
+
+        delete_schedule = FALSE
+
+        IF ( INDEX ( delete_id, BACKGROUND_SAMPLES      ) = 1 ) OR
+           ( INDEX ( delete_id, BACKGROUND_SAMPLE_LOGIN ) = 1 ) THEN
+
+            delete_schedule = ( SELECT COUNT timerqueue
+                 WHERE entry_id = PAD ( BACKGROUND_SAMPLES      , " ", 10 ) :
+                                    SUBSTRING ( delete_id, 11, 10 ) OR 
+                       entry_id = PAD ( BACKGROUND_SAMPLE__LOGIN, " ", 10 ) :
+                                    SUBSTRING ( delete_id, 11, 10 )   )
+                                  > 1
+
+            IF delete_schedule THEN
+
+                message_fetch ( "SCHED_MANAGER_DELETE_LOGIN_SCHED" ,
+                                message_ptr                        )
+
+                message_add_parameter ( message_ptr                             ,
+                                        STRIP ( SUBSTRING ( delete_id, 11, 10 )))
+
+                delete_schedule = confirm_with_text (
+                                      message_get_text ( message_ptr, 1 ))
+
+            ENDIF
+
+        ENDIF
+
+        IF delete_schedule THEN
+
+            entry_number = SELECT timerqueue . entry_number
+                 WHERE entry_id = PAD ( BACKGROUND_SAMPLES      , " ", 10 ) :
+                                    SUBSTRING ( delete_id, 11, 10 ) OR 
+                       entry_id = PAD ( BACKGROUND_SAMPLE__LOGIN, " ", 10 ) :
+                                    SUBSTRING ( delete_id, 11, 10 )
+
+            WHILE entry_number <> EMPTY DO
+
+                delete_timer_entry ( entry_number )
+
+                entry_number = SELECT timerqueue . entry_number
+                     WHERE entry_id = PAD ( BACKGROUND_SAMPLES      , " ", 10 ) :
+                                        SUBSTRING ( delete_id, 11, 10 ) OR 
+                           entry_id = PAD ( BACKGROUND_SAMPLE__LOGIN, " ", 10 ) :
+                                        SUBSTRING ( delete_id, 11, 10 )
+
+            ENDWHILE
+
+        ELSE
+
+            delete_timer_entry ( entry_number )
+
+        SET GLOBAL "READ_TIME" TO read_time
+
+        ENDIF
+
+    ENDIF
+
+ENDROUTINE { sched_manager_delete_entry }
+
+{******************************************************************************}
+
+        ROUTINE sched_manager_remove ( self )
+
+{
+*
+*
+*******************************************************************************}
+
+        DECLARE temp , item , first_one , msg
+
+        item = self.
+               parent_prompt .
+               prompt_objects [ SCHED_MNGR_FORM_LIST ] .
+               get_first_selected ( first_one )
+
+        IF sched_manager_check_item_exists ( first_one , FALSE ) THEN
+
+                item = self.
+                       parent_prompt .
+                       prompt_objects [ SCHED_MNGR_FORM_LIST ] .
+                       get_next_selected ( temp )
+
+                IF sched_manager_check_item_exists ( temp , TRUE ) THEN
+
+                        msg = GET_USER_MESSAGE ( "SCHED_MANAGER_CONFIRM_REMOVE" , 2 )
+
+                ELSE
+                        msg = GET_USER_MESSAGE ( "SCHED_MANAGER_CONFIRM_REMOVE" , 1 )
+
+                ENDIF
+
+                IF confirm_with_text ( msg ) THEN
+
+                        sched_manager_delete_entry ( first_one )
+
+                        WHILE item <> EMPTY DO
+
+                                sched_manager_delete_entry ( temp )
+
+                                item = self.
+                                       parent_prompt .
+                                       prompt_objects [ SCHED_MNGR_FORM_LIST ] .
+                                       get_next_selected ( temp )
+
+                        ENDWHILE
+
+                ENDIF
+
+                self . parent_prompt . prompt_objects [ SCHED_MNGR_FORM_LIST ] .
+                removeallitems ( )
+
+                sched_manager_insert_reports ( self .
+                                               parent_prompt .
+                                               prompt_objects [ SCHED_MNGR_FORM_LIST ] )
+
+        ELSE
+                flash_message ( GET_USER_MESSAGE (
+                        "SCHED_MANAGER_NO_SELECTION" , 1 ) , TRUE )
+
+        ENDIF
+
+ENDROUTINE { sched_manager_remove }
+
+{******************************************************************************}
+
+        ROUTINE sched_manager_help ( self )
+
+{
+*
+*
+*******************************************************************************}
+
+        prompt_help_gui ( self . user_info )
+
+ENDROUTINE { sched_manager_new }
+
+{******************************************************************************}
+
+        ROUTINE sched_manager_list_right_mouse ( self )
+
+{
+*
+*
+*******************************************************************************}
+
+        DECLARE temp , item , menu , result , count
+
+        ARRAY menu
+
+        count = 0
+
+        item = self .
+               parent_prompt .
+               prompt_objects [ SCHED_MNGR_FORM_LIST ] .
+               get_first_selected ( temp )
+
+        IF item <> EMPTY THEN
+
+                REPEAT
+                        count = count + 1
+                        menu [ count ] = GET_USER_MESSAGE ( "SCHED_MANAGER_POPUP_MENU" , count )
+
+                UNTIL count = 5
+
+        ENDIF
+
+        menu [ count + 1 ] = GET_USER_MESSAGE ( "SCHED_MANAGER_POPUP_MENU" , 6 )
+
+        result = client_do_popup_menu ( menu , 0 , 0 , 0 )
+
+        IF ( result = GET_USER_MESSAGE ( "SCHED_MANAGER_POPUP_MENU" , 1 ) ) THEN
+
+                sched_manager_edit ( self )
+
+        ELSEIF ( result = GET_USER_MESSAGE ( "SCHED_MANAGER_POPUP_MENU" , 2 ) ) THEN
+
+                sched_manager_remove ( self )
+
+        ELSEIF ( result = GET_USER_MESSAGE ( "SCHED_MANAGER_POPUP_MENU" , 4 ) ) THEN
+
+                START WRITE TRANSACTION "Updating Timerqueue"
+
+                WHILE item <> EMPTY DO
+
+                        item = SELECT timerqueue . entry_number
+                               FOR update
+                               WHERE entry_number = STRIP ( temp )
+
+                        IF item <> EMPTY THEN
+
+                                item = SELECT timerqueue . suspended
+
+                                ASSIGN timerqueue . suspended = NOT ( item )
+
+                                UPDATE timerqueue
+
+                        ENDIF
+
+                        item = self.
+                               parent_prompt .
+                               prompt_objects [ SCHED_MNGR_FORM_LIST ] .
+                               get_next_selected ( temp )
+
+                ENDWHILE
+
+                COMMIT
+                
+                wake_background ( )
+        
+                sched_manager_insert_reports ( self .
+                                               parent_prompt .
+                                               prompt_objects [ SCHED_MNGR_FORM_LIST ] )
+
+        ELSEIF ( result = GET_USER_MESSAGE ( "SCHED_MANAGER_POPUP_MENU" , 6 ) ) THEN
+
+                sched_manager_insert_reports (
+                        self .
+                        parent_prompt .
+                        prompt_objects [ SCHED_MNGR_FORM_LIST ] )
+
+        ENDIF
+
+ENDROUTINE { sched_manager_list_right_mouse }
+
+{******************************************************************************}
+
+        ROUTINE sched_manager_insert_reports ( list )
+
+{
+*
+*
+*******************************************************************************}
+
+        DECLARE schedule , stat , rep_name , mode ,  ent_num , ok_to_insert,
+                task_name
+
+        SET DATE FORMAT "DZ-MON-YYYY H24:MI"
+
+        ent_num = PACKED_DECIMAL ( 0 )
+
+        list . removeallitems ( )
+
+       { schedule = SELECT timerqueue . entry_number
+                   WHERE entry_number <> ent_num
+                   ORDER ON entry_number}
+	{CHG002}
+      schedule = SELECT timerqueue . entry_number
+                   WHERE entry_number <> ent_num
+                   ORDER ON description
+
+        WHILE ( schedule  <> EMPTY ) DO
+
+                rep_name = SELECT timerqueue . report_name
+                task_name = SELECT timerqueue . task
+
+                IF STRIP ( rep_name ) <> NOTHING THEN
+
+                        ok_to_insert = TRUE
+
+                        IF rep_name = "$BSMPLOGIN" THEN
+
+                                rep_name = STRIP ( SELECT timerqueue . param_string )
+                                mode = LOGIN_TEXT
+
+                        ELSE
+
+                                mode = REPORT_TEXT
+
+                        ENDIF
+                
+                ELSEIF STRIP ( task_name ) <> NOTHING THEN
+                        
+                        ok_to_insert = TRUE
+                        rep_name = STRIP ( task_name )
+                        mode = TASK_TEXT
+
+                ELSE
+
+                        ok_to_insert = FALSE
+
+                ENDIF
+
+                IF ok_to_insert THEN
+        
+                        list . insert_item ( schedule , LIST_NO_IMAGE )
+                        list . set_item ( 2 , mode )
+                        list . set_item ( 3 , rep_name )
+                        list . set_item ( 4 , SELECT timerqueue . run_time )
+                        list.set_item(6,SELECT timerqueue.description) { CHG001 }
+                        stat = SELECT timerqueue . suspended
+
+                        IF stat THEN
+
+                                list . set_item ( 5 ,
+                                GET_USER_MESSAGE ( "SCHED_MANAGER_SUSPENDED" , 1 ) )
+
+                        ELSE
+
+                                list . set_item ( 5 ,
+                                GET_USER_MESSAGE ( "SCHED_MANAGER_ACTIVE" , 1 ) )
+
+                        ENDIF
+
+                ENDIF
+
+                NEXT timerqueue
+                schedule = SELECT timerqueue . entry_number
+
+        ENDWHILE
+
+        RESTORE DATE FORMAT
+
+ENDROUTINE { sched_manager_insert_reports }
+
+{******************************************************************************}
+
+        GLOBAL
+
+        ROUTINE sched_manager_task_scheduler ( sched_mngr_form ,
+                                               VALUE field_row )
+
+{
+*
+*
+*******************************************************************************}
+
+        DECLARE task_form , ok_to_leave
+
+        ok_to_leave = FALSE
+
+        sched_manager_setup_forms ( task_form                   ,
+                                    sched_mngr_form . user_info ,
+                                    field_row                   )
+
+        task_form . start_prompt ( )
+
+        task_form . active_prompt = REPORT_NAME             
+        
+
+        REPEAT
+
+                task_form . wait_prompt ( )
+
+                IF task_form . get_lastkey ( ) = "DO" THEN
+
+                        IF sched_manager_values_are_ok ( task_form ) THEN
+
+                                sched_manager_make_assignments ( task_form , field_row )
+
+                                sched_manager_insert_reports ( sched_mngr_form .
+                                                prompt_objects [ SCHED_MNGR_FORM_LIST ] )
+
+                                ok_to_leave = TRUE
+
+                        ENDIF
+
+                ELSEIF task_form . get_lastkey ( ) = "EXIT" THEN
+
+                        ok_to_leave = TRUE
+
+                ENDIF
+
+        UNTIL ok_to_leave
+        
+        task_form . end_prompt ( )
+
+        wake_background ( )
+
+ENDROUTINE { sched_manager_task_scheduler }
+
+{******************************************************************************}
+
+        ROUTINE sched_manager_edit_schedule ( form , schedule_number )
+
+
+{
+* Set all the text boxes , check boxes etc.. to edit a timerqueue record
+*
+*******************************************************************************}
+        
+        DECLARE tab , schedule , recurrence_type , end_date , num_occur ,
+                run_win  , count , days_code , rep_inv
+
+        schedule = SELECT timerqueue . entry_number
+                   WHERE entry_number = schedule_number
+
+        IF schedule = EMPTY THEN
+                { Error !!! }
+        ENDIF
+
+        { CHG001 }
+        form.prompt_objects[DESCRIPTION_PROMPT].value = SELECT timerqueue.description
+        IF form . user_info = REP_SCHED THEN
+
+                form . prompt_objects [ REPORT_NAME ] . value =
+                        SELECT timerqueue . report_name
+                form . prompt_objects [ ROUTINE_NAME ] . value =
+                        SELECT timerqueue . routine_name
+                       
+
+                IF STRIP( form . prompt_objects [ REPORT_NAME ] . value ) = NOTHING THEN
+                        sched_manager_toggle_report_prompts(form, form . prompt_objects [ RADIO_DOTNET ])
+
+                ELSE
+            sched_manager_toggle_report_prompts(form, form . prompt_objects [ RADIO_VGL ])
+                ENDIF
+                
+        IF form . prompt_objects [ ROUTINE_NAME ] . value = NOTHING THEN
+            form . prompt_objects [ ROUTINE_NAME ] . value = NONE  
+                ENDIF
+        
+                form . prompt_objects [ PARAM_NAME ] . value =
+                        SELECT timerqueue . param_string
+                        
+        form . prompt_objects [ TASK ] . value =
+            SELECT timerqueue . task
+        form . prompt_objects [ TASK_PARAMS ] . value =
+                        SELECT timerqueue . task_params                        
+                        
+            form . prompt_objects [ TASK ] .value = SELECT timerqueue . task           
+        form . prompt_objects [ TASK_PARAMS ] .value = SELECT timerqueue . task_params
+                        
+            
+
+        ELSEIF form . user_info = LOG_SCHED THEN
+                        form . prompt_objects [ REPORT_NAME ] . value =
+                                SELECT timerqueue . param_string
+        ENDIF
+
+        form . prompt_objects [ PRINTER_NAME ] . value =
+                        SELECT timerqueue . printer
+        form . prompt_objects [ SUSPENDED ] . value =
+                        SELECT timerqueue . suspended
+        form . prompt_objects [ USER_NAME ] . value =
+                        SELECT timerqueue . user_name
+        form . prompt_objects [ STARTING_DATE ] . value =
+                        SELECT timerqueue . start_date
+
+        IF form . prompt_objects [ STARTING_DATE ] . value = DATE ( NOTHING ) THEN
+                form . prompt_objects [ STARTING_DATE ] . value = TODAY
+        ENDIF
+
+        end_date = SELECT timerqueue . end_date
+
+        IF end_date = DATE ( NOTHING ) THEN
+                end_date = EMPTY
+        ENDIF
+
+        num_occur = SELECT timerqueue . number_of_occurences
+        
+        IF ( end_date = EMPTY ) AND ( num_occur = 0 ) THEN
+                form . prompt_objects [ NO_END_DATE ] . value = TRUE
+                form . prompt_objects [ END_AFTER_DATE ] . value = FALSE
+                form . prompt_objects [ END_BY_DATE ] . value = FALSE
+        ELSEIF ( end_date = EMPTY ) AND ( num_occur <> 0 ) THEN
+                form . prompt_objects [ NO_END_DATE ] . value = FALSE
+                form . prompt_objects [ END_AFTER_DATE ] . value = TRUE
+                form . prompt_objects [ AFTER_OCCUR ] . value = num_occur
+                form . prompt_objects [ END_BY_DATE ] . value = FALSE
+        ELSEIF ( end_date <> EMPTY ) AND ( num_occur = 0 ) THEN
+                form . prompt_objects [ NO_END_DATE ] . value = FALSE
+                form . prompt_objects [ END_AFTER_DATE ] . value = FALSE
+                form . prompt_objects [ END_BY_DATE ] . value = TRUE
+                form . prompt_objects [ ENDING_DATE ] .value = end_date
+        ENDIF
+
+        run_win = SELECT timerqueue . run_window
+        IF run_win <> INTERVAL ( 0 ) THEN
+                form . prompt_objects [ RUN_WIN_CHECK_BOX ] .value = TRUE
+                form . prompt_objects [ RUN_WIN_VALUE ] .value = run_win
+        ENDIF
+        
+        recurrence_type = SELECT timerqueue . recurrence_type
+
+    IF recurrence_type = 0 THEN
+
+        tab = form . prompt_objects [ TAB_FORMS ] . forms [ 5 ]
+        form . prompt_objects [ TAB_FORMS ] . selected = 5
+
+        rep_inv = SELECT timerqueue . repeat_interval
+
+        IF rep_inv <> INTERVAL ( 0 ) THEN
+
+            tab . prompt_objects [ FREQ_RADIO_1 ] . value = TRUE
+            tab . prompt_objects [ FREQ_PROMPT_1 ] . value = rep_inv 
+            tab . prompt_objects [ FREQ_RADIO_2 ] . value = FALSE
+            tab . prompt_objects [ FREQ_PROMPT_2 ] . value = NOTHING
+
+        ELSE
+
+            tab . prompt_objects [ FREQ_RADIO_1 ] . value = FALSE
+            tab . prompt_objects [ FREQ_PROMPT_1 ] . value = INTERVAL ( 0 ) 
+            tab . prompt_objects [ FREQ_RADIO_2 ] . value = TRUE
+            tab . prompt_objects [ FREQ_PROMPT_2 ] . value =
+                SELECT timerqueue . timer_schedule
+
+        ENDIF
+
+    ELSEIF recurrence_type = DAY_STYLE_1 THEN
+
+                tab = form . prompt_objects [ TAB_FORMS ] . forms [ 1 ]
+                form . prompt_objects [ TAB_FORMS ] . selected = 1
+                tab . prompt_objects [ DAY_RADIO_1 ] . value = TRUE
+                tab . prompt_objects [ DAY_PROMPT_1 ] . value =
+                        SELECT timerqueue . recurrence_data_1
+                tab . prompt_objects [ DAY_RADIO_2 ] . value = FALSE
+        
+        ELSEIF recurrence_type = DAY_STYLE_2 THEN
+
+                tab = form . prompt_objects [ TAB_FORMS ] . forms [ 1 ]
+                form . prompt_objects [ TAB_FORMS ] . selected = 1
+                tab . prompt_objects [ DAY_RADIO_1 ] . value = FALSE
+                tab . prompt_objects [ DAY_PROMPT_1 ] .value = 1
+                tab . prompt_objects [ DAY_RADIO_2 ] . value = TRUE             
+        
+        ELSEIF recurrence_type = WEEK_STYLE THEN
+
+                tab = form . prompt_objects [ TAB_FORMS ] . forms [ 2 ]
+                form . prompt_objects [ TAB_FORMS ] . selected = 2
+                tab . prompt_objects [ WEEK_PROMPT_1 ] . value =
+                        SELECT timerqueue . recurrence_data_1
+                count = 7
+                days_code = SELECT timerqueue . recurrence_data_2
+                days_code = ROUND ( NUMERIC ( days_code ) )
+                REPEAT
+                        count = count - 1
+                        days_code = ROUND ( days_code - ( 2 ^ count ) )
+
+                        IF days_code < 0 THEN
+                                days_code = days_code + ( 2 ^ count )
+                                tab . prompt_objects [ 8 - count ] . value = FALSE
+                        ELSE
+                                tab . prompt_objects [ 8 - count ] . value = TRUE
+                        ENDIF
+                UNTIL count = 0
+        
+        ELSEIF recurrence_type = MONTH_STYLE_1 THEN
+
+                tab = form . prompt_objects [ TAB_FORMS ] . forms [ 3 ]
+                form . prompt_objects [ TAB_FORMS ] . selected = 3
+                tab . prompt_objects [ MONTH_RADIO_1 ] . value = TRUE
+                tab . prompt_objects [ MONTH_PROMPT_1 ] . value =
+                        SELECT timerqueue . recurrence_data_1
+                tab . prompt_objects [ MONTH_PROMPT_2 ] . value =
+                        SELECT timerqueue . recurrence_data_2
+                tab . prompt_objects [ MONTH_RADIO_2 ] . value = FALSE
+
+        ELSEIF recurrence_type = MONTH_STYLE_2 THEN
+
+                tab = form . prompt_objects [ TAB_FORMS ] . forms [ 3 ]
+                form . prompt_objects [ TAB_FORMS ] . selected = 3
+                tab . prompt_objects [ MONTH_RADIO_1 ] . value = FALSE
+                tab . prompt_objects [ MONTH_RADIO_2 ] . value = TRUE
+                tab . prompt_objects [ MONTH_LIST_1 ] . value =
+                        SELECT timerqueue . recurrence_data_1
+                tab . prompt_objects [ MONTH_LIST_2 ] . value =
+                        SELECT timerqueue . recurrence_data_2
+                tab . prompt_objects [ MONTH_PROMPT_3 ] . value =
+                        SELECT timerqueue . recurrence_data_3
+
+        ELSEIF recurrence_type = YEAR_STYLE_1 THEN
+
+                tab = form . prompt_objects [ TAB_FORMS ] . forms [ 4 ]
+                form . prompt_objects [ TAB_FORMS ] . selected = 4
+                tab . prompt_objects [ YEAR_RADIO_1 ] . value = TRUE
+                tab . prompt_objects [ YEAR_RADIO_2 ] . value = FALSE
+                tab . prompt_objects [ YEAR_LIST_1 ] . value =
+                        SELECT timerqueue . recurrence_data_1
+                tab . prompt_objects [ YEAR_PROMPT_1 ] . value =
+                        SELECT timerqueue . recurrence_data_2
+
+        ELSEIF recurrence_type = YEAR_STYLE_2 THEN
+
+                tab = form . prompt_objects [ TAB_FORMS ] . forms [ 4 ]
+                form . prompt_objects [ TAB_FORMS ] . selected = 4
+                tab . prompt_objects [ YEAR_RADIO_1 ] . value = FALSE
+                tab . prompt_objects [ YEAR_RADIO_2 ] . value = TRUE
+                tab . prompt_objects [ YEAR_LIST_2 ] . value =
+                        SELECT timerqueue . recurrence_data_1
+                tab . prompt_objects [ YEAR_LIST_3 ] . value =
+                        SELECT timerqueue . recurrence_data_2
+                tab . prompt_objects [ YEAR_LIST_4 ] . value =
+                        SELECT timerqueue . recurrence_data_3
+
+    ENDIF
+        
+ENDROUTINE { sched_manager_edit_schedule }
+
+{******************************************************************************}
+
+        ROUTINE sched_manager_make_assignments ( task_form , field_row )
+
+{
+*
+*
+*******************************************************************************}
+
+        DECLARE recurr_type , data , count , tab , tab_selected , day , week ,
+                month , num_of_occur , end_date , item
+
+        ARRAY data ARRAYSIZE ( 3 ) = " "
+        ARRAY day  ARRAYSIZE ( 0 , 2 )
+        ARRAY week ARRAYSIZE ( 0 , 2 )
+        ARRAY day  ARRAYSIZE ( 0 , 2 )
+
+        day   = sched_manager_populate_day_array ( )
+        week  = sched_manager_populate_week_array ( )
+        month = sched_manager_populate_month_array ( )
+
+        IF field_row <> EMPTY THEN
+
+                item = SELECT timerqueue . entry_number
+                       FOR update
+                       WHERE entry_number = field_row
+
+        ELSE
+
+                item = INCREMENT ( "TIMERQUEUE" , "ENTRY_NUMBER" )
+        item = PACKED_DECIMAL ( item )
+                
+                RESERVE ENTRY timerqueue , item
+
+        ENDIF
+
+        IF task_form . user_info = REP_SCHED THEN
+
+                ASSIGN timerqueue . report_name =
+                        task_form . prompt_objects [ REPORT_NAME ] . value
+                
+                IF task_form .
+                   prompt_objects [ ROUTINE_NAME ] .
+                   value <> NONE THEN
+
+                        ASSIGN timerqueue . routine_name =
+                                task_form . prompt_objects [ ROUTINE_NAME ] . value
+                ELSE
+                        ASSIGN timerqueue . routine_name = NOTHING
+                ENDIF
+                
+                ASSIGN timerqueue . param_string =
+                        task_form . prompt_objects [ PARAM_NAME ] . value
+        
+            ASSIGN timerqueue . task = task_form . prompt_objects [ TASK ] . value
+            ASSIGN timerqueue . task_params = task_form . prompt_objects [ TASK_PARAMS ] . value
+
+        ELSEIF task_form . user_info = LOG_SCHED THEN
+
+                ASSIGN timerqueue . report_name = "$BSMPLOGIN"
+                ASSIGN timerqueue . routine_name = "BSMPLOGIN_JOB"
+        ASSIGN timerqueue . entry_id  =
+                PAD ( BACKGROUND_SAMPLE_LOGIN, " ", 10 ) :
+                PAD ( task_form . prompt_objects [ REPORT_NAME ] . value, " ", 10 )
+                ASSIGN timerqueue . param_string =
+                        task_form . prompt_objects [ REPORT_NAME ] . value
+
+        ENDIF
+        
+        { CHG001 }
+        ASSIGN timerqueue.description = task_form.prompt_objects[DESCRIPTION_PROMPT].value
+        ASSIGN timerqueue . printer =
+                task_form . prompt_objects [ PRINTER_NAME ] . value
+                
+        ASSIGN timerqueue . suspended =
+                task_form . prompt_objects [ SUSPENDED ] . value
+
+        IF GLOBAL ( "timerqueue_user_enabled" ) THEN
+                ASSIGN timerqueue . user_name =
+                task_form . prompt_objects [ USER_NAME ] . value
+        ENDIF
+
+        ASSIGN timerqueue . start_date =
+                task_form . prompt_objects [ STARTING_DATE ] . value
+
+        IF task_form . prompt_objects [ NO_END_DATE ] . value THEN
+                num_of_occur = 0
+                end_date = DATE ( NOTHING )
+        ENDIF
+
+        IF task_form . prompt_objects [ END_AFTER_DATE ] . value THEN
+                num_of_occur = task_form . prompt_objects [ AFTER_OCCUR ] . value
+                end_date = DATE ( NOTHING )
+        ENDIF
+
+        IF task_form . prompt_objects [ END_BY_DATE ] . value THEN
+                num_of_occur = 0
+                end_date = task_form . prompt_objects [ ENDING_DATE ] . value
+        ENDIF
+
+        ASSIGN timerqueue . number_of_occurences = num_of_occur
+        ASSIGN timerqueue . end_date = end_date
+
+        IF task_form . prompt_objects [ RUN_WIN_CHECK_BOX ] . value THEN
+                ASSIGN timerqueue . run_window =
+                        task_form . prompt_objects [ RUN_WIN_VALUE ] . value
+        ELSE
+                ASSIGN timerqueue . run_window = INTERVAL ( 0 )
+        ENDIF
+
+        tab_selected = task_form .
+                       prompt_objects [ TAB_FORMS ] .
+                       selected
+
+        tab = task_form .
+              prompt_objects [ TAB_FORMS ] .
+              forms [ tab_selected ]
+
+        IF tab_selected = 1 THEN
+
+                IF tab . prompt_objects [ DAY_RADIO_1 ] . value THEN
+
+                        recurr_type = DAY_STYLE_1
+                        data [ 1 ] = tab . prompt_objects [ DAY_PROMPT_1 ] .
+                        value
+
+                ELSEIF tab . prompt_objects [ DAY_RADIO_2 ] . value THEN
+
+                        recurr_type = DAY_STYLE_2
+                ENDIF
+        ENDIF
+
+        IF tab_selected = 2 THEN
+
+                recurr_type = WEEK_STYLE
+                data [ 2 ] = 0
+                data [ 1 ] = tab . prompt_objects [ WEEK_PROMPT_1 ] . value
+                count = 1       
+
+                REPEAT
+
+                        count = count + 1
+                        IF tab . prompt_objects [ count ] . value THEN
+                                data [ 2 ] =
+                                data [ 2 ] + 2 ^ ( ABS ( count - 8 ) )
+                        ENDIF
+                UNTIL count = 8
+                data [ 2 ] = ROUND ( data [ 2 ] )
+        ENDIF
+
+        IF tab_selected = 3 THEN
+
+                IF tab . prompt_objects [ MONTH_RADIO_1 ] . value THEN
+
+                        recurr_type = MONTH_STYLE_1
+                        data [ 1 ] = tab . prompt_objects [ MONTH_PROMPT_1 ] .
+                        value
+                        data [ 2 ] = tab . prompt_objects [ MONTH_PROMPT_2 ] .
+                        value
+                ENDIF
+
+                IF tab . prompt_objects [ MONTH_RADIO_2 ] .value THEN
+
+                        recurr_type = MONTH_STYLE_2
+                        data [ 1 ] = week [
+                                     tab . prompt_objects [ MONTH_LIST_1 ] .
+                                     value , 2 ]
+                        data [ 2 ] = day  [
+                                     tab . prompt_objects [ MONTH_LIST_2 ] .
+                                     value , 2 ]
+                        data [ 3 ] = tab . prompt_objects [ MONTH_PROMPT_3 ] .
+                                     value
+                ENDIF
+        ENDIF
+
+        IF tab_selected = 4 THEN
+
+                IF tab . prompt_objects [ YEAR_RADIO_1 ] . value THEN
+
+                        recurr_type = YEAR_STYLE_1
+                        data [ 1 ] = month [
+                                     tab . prompt_objects [ YEAR_LIST_1 ] .
+                                     value , 2 ]
+                        data [ 2 ] = tab . prompt_objects [ YEAR_PROMPT_1 ] .
+                                     value
+                
+                ENDIF
+
+                IF tab . prompt_objects [ YEAR_RADIO_2 ] .value THEN
+                        
+                        recurr_type = YEAR_STYLE_2
+                        data [ 1 ] = week  [
+                                     tab . prompt_objects [ YEAR_LIST_2 ] .
+                                     value , 2 ]
+                        data [ 2 ] = day   [
+                                     tab . prompt_objects [ YEAR_LIST_3 ] .
+                                     value , 2 ]
+                        data [ 3 ] = month [
+                                     tab . prompt_objects [ YEAR_LIST_4 ] .
+                                     value , 2 ]
+                ENDIF
+        ENDIF
+
+        IF tab_selected = 5 THEN
+
+                recurr_type = 0
+
+                IF tab . prompt_objects [ FREQ_RADIO_1 ] . value THEN
+
+                        ASSIGN timerqueue . repeat_interval =
+                                tab . prompt_objects [ FREQ_PROMPT_1 ] . value
+                        data [ 1 ] = tab . prompt_objects [ FREQ_PROMPT_1 ] . value
+                
+                ENDIF
+
+                IF tab . prompt_objects [ FREQ_RADIO_2 ] .value THEN
+
+                        ASSIGN timerqueue . timer_schedule =
+                                tab . prompt_objects [ FREQ_PROMPT_2 ] . value
+
+                ENDIF
+        ENDIF
+
+        ASSIGN timerqueue . recurrence_type = recurr_type
+        ASSIGN timerqueue . recurrence_data_1 = data [ 1 ]
+        ASSIGN timerqueue . recurrence_data_2 = data [ 2 ]
+        ASSIGN timerqueue . recurrence_data_3 = data [ 3 ]
+        ASSIGN timerqueue . run_time = NOW
+        
+
+        START WRITE TRANSACTION "Updating Timerqueue"
+        UPDATE timerqueue
+        COMMIT
+
+        task_vgl_interface ( item )
+
+ENDROUTINE { sched_manager_make_assignments }
+
+{******************************************************************************}
+
+        ROUTINE sched_manager_setup_forms ( task_form , mode , field_row )
+{
+*
+*
+*******************************************************************************}
+
+        DECLARE tab , count
+        
+        { - Tab Forms - }
+        DECLARE daily_tab , weekly_tab , monthly_tab , yearly_tab ,
+                frequency_tab
+
+        { - Buttons - }
+        DECLARE ok_prompt , help_prompt , cancel_prompt
+
+        { - Report Details - }
+        DECLARE prompt_1 , prompt_2 , prompt_3 , printer_prompt ,
+                current_stat_prompt , user_name_prompt, prompt_4 ,
+                prompt_5, prompt_6, prompt_7, prompt_start
+
+        { - Range of Recurrence - }
+        DECLARE start_date , no_end , end_after , end_after_occurences ,
+                end_by , end_date , run_win_check , run_win_interval
+                
+
+    { If we are in report mode a radio button is needed so we
+      need to move all the prompts down 1 row. }
+        IF mode = REP_SCHED THEN        
+            prompt_start = 1
+        ELSE            
+        prompt_start = 0
+    ENDIF
+    
+        CREATE OBJECT "STD_FORM" , task_form
+
+        task_form . header =
+                GET_USER_MESSAGE ( "SCHED_MANAGER_ENTRY_FORM_HEADER" , 1 )
+        task_form . height               = 24 + prompt_start
+        task_form . width                = TASK_FORM_WIDTH
+        task_form . column               = TASK_FORM_COLUMN
+        task_form . row                  = TASK_FORM_ROW
+        task_form . button_style         = FORM_BUTTON_NONE
+        task_form . return_behaviour     = FORM_RETURN_STAY
+        task_form . enter_prompt_routine = "enter_routine"
+        task_form . user_info            = mode
+
+        { - Report / Login Details - }  
+        
+        task_form . add_frame (
+                GET_USER_MESSAGE ( "SCHED_MANAGER_FRAME_DETAILS" , mode ) ,
+                2                                                         ,
+                1                                                         ,
+                6 +  prompt_start                                         ,
+                task_form . width - 2                                     )
+
+        IF mode = REP_SCHED THEN
+
+        task_form . add_display (
+            GET_USER_MESSAGE ( "SCHED_MANAGER_ID_NAME" , mode ) ,
+            4                                                   ,
+            1 + prompt_start                                    ,
+            PROMPT_RENDITION_BOLD                               )
+
+        PROMPT OBJECT prompt_1
+            BROWSE ON REPORT
+            ON LINE 1 + prompt_start
+            FROM 17
+            TO PROMPT_WIDTH + 17
+            WITH ( width              = PROMPT_WIDTH        ,
+                   always_validate    = FALSE                       ,
+                   validation_routine = "sched_manager_valid_id"    )
+
+        task_form . add_display (
+            GET_USER_MESSAGE ( "SCHED_MANAGER_TASK" , 1 )   ,
+            TASK_FORM_REPORT_DIVIDE                     ,
+            1 + prompt_start                            ,
+            PROMPT_RENDITION_BOLD                           )
+
+        PROMPT OBJECT prompt_4
+            FORMAT timerqueue.task
+            ON LINE 1 + prompt_start 
+            FROM TASK_FORM_REPORT_DIVIDE + 15
+            TO TASK_FORM_REPORT_DIVIDE + 15 + PROMPT_WIDTH
+            WITH (enabled = FALSE,  
+                  always_validate    = FALSE                     ,
+                  validation_routine = "sched_manager_valid_task" )
+
+        task_form . add_display (
+            GET_USER_MESSAGE ( "SCHED_MANAGER_TASK_PARAMS" , 1 ) ,
+            TASK_FORM_REPORT_DIVIDE  ,
+            2 + prompt_start                                                        ,
+            PROMPT_RENDITION_BOLD                                    )
+
+        PROMPT OBJECT prompt_5
+            FORMAT timerqueue.task_params
+            ON LINE 2 + prompt_start
+            FROM TASK_FORM_REPORT_DIVIDE + 15
+            TO TASK_FORM_REPORT_DIVIDE + 15 + PROMPT_WIDTH
+            WITH (enabled = FALSE)
+
+        PROMPT OBJECT prompt_6
+            BROWSE ON BOOLEAN
+            WITH ( caption         = GET_USER_MESSAGE ( "SCHED_MANAGER_RADIO_REPORT" , mode ) ,
+                   row             = 1                                                        ,
+                   column          = 17                                                       ,
+                   height          = 1                                                        ,
+                   width           = 1                                                        ,
+                   vgl_library     = global ( "current_library" )                             ,
+                   is_radio        = TRUE                                                     ,
+                   tag             = RADIO_VGL                                                ,
+                   parent_prompt   = task_form                                                ,
+                   value           = TRUE                                                     ,
+                   toggled_routine = "sched_manager_toggle_routine"                           )
+
+        PROMPT OBJECT prompt_7
+            BROWSE ON BOOLEAN
+            WITH ( caption     = GET_USER_MESSAGE ( "SCHED_MANAGER_RADIO_TASK" , 1 )    ,
+                   row         = 1                          ,
+                   column      = TASK_FORM_REPORT_DIVIDE + 15               ,
+                   height      = 1                          ,
+                   width       = 1                          ,
+                   vgl_library = global ( "current_library" )               ,
+                   is_radio    = TRUE                           , 
+                   tag = RADIO_DOTNET                           ,
+                   parent_prompt = task_form                        ,
+                   toggled_routine = "sched_manager_toggle_routine"             )
+
+        ELSEIF mode = LOG_SCHED
+
+                task_form . add_display (
+                    GET_USER_MESSAGE ( "SCHED_MANAGER_ID_NAME" , mode ) ,
+                    4                                                   ,
+                    1                                               ,
+                    PROMPT_RENDITION_BOLD                               )
+                
+                PROMPT OBJECT prompt_1
+                AT 18 , 1
+                BROWSE ON LOG_SCHED_HEADER
+                WITH ( width              = PROMPT_WIDTH ,
+                       always_validate    = TRUE                     ,
+                       validation_routine = "sched_manager_valid_id" )
+        ENDIF
+
+        task_form . add_display (
+                GET_USER_MESSAGE ( "SCHED_MANAGER_ROUTINE_NAME" , mode ) ,
+                4                                                        ,
+                2 + prompt_start                                         ,
+                PROMPT_RENDITION_BOLD                                    )
+
+        PROMPT OBJECT prompt_2
+                AT 17 , 2 + prompt_start
+                WITH (  width              = PROMPT_WIDTH                   ,
+                        browse_routine     = "sched_manager_routine_browse" ,
+                        validation_routine = "sched_manager_valid_routine"  )
+
+        task_form . add_display (
+                GET_USER_MESSAGE ( "SCHED_MANAGER_PARAMETER" , mode ) ,
+                4                                                     ,
+                3 + prompt_start                                      ,
+                PROMPT_RENDITION_BOLD                                 )
+
+        PROMPT OBJECT prompt_3
+                AT 17 , 3 + prompt_start
+                WITH ( width = PROMPT_WIDTH  )                             
+
+        task_form . add_display (
+                GET_USER_MESSAGE ( "SCHED_MANAGER_PRINTER" , 1 ) ,
+                TASK_FORM_REPORT_DIVIDE                          ,
+                5 + prompt_start                                 ,
+                PROMPT_RENDITION_BOLD                            )
+
+        PROMPT OBJECT printer_prompt
+                ON LINE 5 + prompt_start 
+                FROM TASK_FORM_REPORT_DIVIDE + 15
+        TO TASK_FORM_REPORT_DIVIDE + 15 + PROMPT_WIDTH
+                BROWSE ON PRINTER
+                WITH ( width = TASK_FORM_REPORT_DIVIDE + 15 + PROMPT_WIDTH )
+
+        task_form . add_display (
+                GET_USER_MESSAGE ( "SCHED_MANAGER_CURRENT_STATUS" , 1 ) ,
+                4                                                       ,
+                5 + prompt_start                                        ,
+                PROMPT_RENDITION_BOLD                                   )
+
+        PROMPT OBJECT current_stat_prompt
+                ON LINE 5 + prompt_start
+                FROM 18
+                TO task_form . width - 3
+                BROWSE ON BOOLEAN
+                WITH (  true_word =
+                        GET_USER_MESSAGE ( "SCHED_MANAGER_SUSPENDED" , 1 ) ,
+                        false_word =
+                        GET_USER_MESSAGE ( "SCHED_MANAGER_ACTIVE" , 1 )    ,
+                        value = FALSE                                      )
+
+        task_form . add_display (
+                GET_USER_MESSAGE ( "SCHED_MANAGER_USER_NAME" , 1 ) ,
+                4                                                  ,
+                6 + prompt_start                                   ,
+                PROMPT_RENDITION_BOLD                              )
+
+        PROMPT OBJECT user_name_prompt
+                ON LINE 6 + prompt_start
+                FROM 18
+                BROWSE ON PERSONNEL
+                WITH ( value = GLOBAL ( "OPERATOR" ) )
+                
+        
+        { - Recurrence Pattern - }
+
+        task_form . add_frame (
+                GET_USER_MESSAGE ( "SCHED_MANAGER_REC_PATTERN" , 1 ) ,
+                TAB_COLUMN - 1                                       ,
+                TAB_ROW + prompt_start                   ,
+                TAB_HEIGHT                                           ,
+                task_form . width - 2                                )
+
+        CREATE OBJECT PROMPT_TAB_CLASS , tab
+
+        tab . height = TAB_HEIGHT
+        tab . width  = ( task_form . width ) - 4
+        tab . row    = TAB_ROW + prompt_start
+        tab . column = TAB_COLUMN
+
+        sched_manager_setup_daily     ( tab , daily_tab     )   
+        sched_manager_setup_weekly    ( tab , weekly_tab    )
+        sched_manager_setup_monthly   ( tab , monthly_tab   )
+        sched_manager_setup_yearly    ( tab , yearly_tab    )
+        sched_manager_setup_frequency ( tab , frequency_tab )
+
+        { - Range of Recurrence - }
+
+        task_form . add_frame (
+                GET_USER_MESSAGE ( "SCHED_MANAGER_REC_RANGE" , 1 ) ,
+                2                                                  ,
+                TAB_ROW + TAB_HEIGHT + 2 + prompt_start                          ,
+                RANGE_RECCUR_HEIGHT                                ,
+                task_form . width - 2                              )
+
+        task_form . add_display (
+                GET_USER_MESSAGE ( "SCHED_MANAGER_START" , 1 ) ,
+                4                                              ,
+                TAB_ROW + TAB_HEIGHT + 2 + prompt_start                      ,
+                PROMPT_RENDITION_BOLD                          )
+
+        PROMPT OBJECT start_date
+                {AT 9 , TAB_ROW + TAB_HEIGHT + 2 + prompt_start}
+                ON LINE TAB_ROW + TAB_HEIGHT + 2 + prompt_start FROM 9 TO 25
+                BROWSE ON DATE
+                WITH ( value      = NOW  ,
+                       allow_time = TRUE ,
+                           validation_routine = "sched_manager_valid_start_date" )
+
+        PROMPT OBJECT no_end
+                AT RANGE_RECCUR_POS , TAB_ROW + TAB_HEIGHT + 2 + prompt_start
+                BROWSE ON BOOLEAN
+                WITH (  is_radio        = TRUE                               ,
+                        status_text     =
+                        GET_USER_MESSAGE ( "SCHED_MANAGER_NO_END_DATE" , 1 ) ,
+                        value           = FALSE,
+                        toggled_routine = "sched_manager_radio_toggle"       ,
+                        vgl_library     = GLOBAL ( "CURRENT_LIBRARY" )       ,
+                        caption = GET_USER_MESSAGE ( "SCHED_MANAGER_NO_END_DATE" , 1 ))
+
+        PROMPT OBJECT end_after
+                AT RANGE_RECCUR_POS , TAB_ROW + TAB_HEIGHT + 3 + prompt_start
+                BROWSE ON BOOLEAN
+                WITH (  is_radio        = TRUE                             ,
+                        status_text     =
+                        GET_USER_MESSAGE ( "SCHED_MANAGER_END_AFTER" , 1 ) ,
+                        value           = TRUE,
+                        toggled_routine = "sched_manager_radio_toggle"     ,
+                        vgl_library     = GLOBAL ( "CURRENT_LIBRARY" )     ,
+                        caption = GET_USER_MESSAGE ( "SCHED_MANAGER_END_AFTER" , 1 ))
+
+        PROMPT OBJECT end_after_occurences
+                AT RANGE_RECCUR_POS + 14 ,  TAB_ROW + TAB_HEIGHT + 3 + prompt_start
+                BROWSE ON INTEGER
+                WITH (  value                = 1                    ,
+                        minimum              = 1                    ,
+                        maximum              = 999                  ,
+                        enter_prompt_routine = "focus_on_end_after" )
+
+        task_form . add_display (
+                GET_USER_MESSAGE ( "SCHED_MANAGER_OCCURENCES" , 1 ) ,
+                RANGE_RECCUR_POS + 22  + prompt_start                             ,
+                end_after . row                                     ,
+                PROMPT_RENDITION_BOLD                               )
+
+        PROMPT OBJECT end_by
+                AT RANGE_RECCUR_POS , TAB_ROW + TAB_HEIGHT + 4 + prompt_start
+                BROWSE ON BOOLEAN
+                WITH (  is_radio        = TRUE                          ,
+                        status_text     =
+                        GET_USER_MESSAGE ( "SCHED_MANAGER_END_BY" , 1 ) ,
+                        value           = FALSE                         ,
+                        toggled_routine = "sched_manager_radio_toggle"  ,
+                        vgl_library     = GLOBAL ( "CURRENT_LIBRARY" )  ,
+                        caption = GET_USER_MESSAGE ( "SCHED_MANAGER_END_BY" , 1 ))
+
+        PROMPT OBJECT end_date
+                AT RANGE_RECCUR_POS + 14 , end_by . row
+                BROWSE ON DATE
+                WITH ( value                = NOW + "1 00:00:00" ,
+                       allow_time           = TRUE               ,
+                       enter_prompt_routine = "focus_on_end_by"  )
+
+        PROMPT OBJECT run_win_check
+                BROWSE ON BOOLEAN
+                AT 4 , TAB_ROW + TAB_HEIGHT + 5 + prompt_start
+                WITH ( is_check         = TRUE  ,
+                       value            = FALSE ,
+                       caption = GET_USER_MESSAGE ( "SCHED_MANAGER_RUN_WIN" , 1 ))
+
+        PROMPT OBJECT run_win_interval
+                BROWSE ON INTERVAL
+                AT 30 , TAB_ROW + TAB_HEIGHT + 5 + prompt_start
+                WITH (  enter_prompt_routine = "set_run_win_check"  )
+
+        PROMPT OBJECT ok_prompt
+                CLASS "STD_PROMPT_BUTTON"
+                WITH (  caption      = GET_USER_MESSAGE (
+                                       "SMP_PROMPT_BUTTON_OK" , 1 ) ,
+                        width        = BUTTON_WIDTH                 ,
+                        column       = 11                            ,
+                        row          = task_form . height - 1       ,
+                        send_lastkey = "DO"                         )
+
+        PROMPT OBJECT help_prompt
+                CLASS "STD_PROMPT_BUTTON"
+                WITH (  caption      = GET_USER_MESSAGE (
+                                       "SMP_PROMPT_BUTTON_HELP" , 1 ) ,
+                        width        = BUTTON_WIDTH                   ,
+                        column       = 31                             ,
+                        row          = task_form . height - 1         ,
+                        mouse_click_routine = "sched_manager_help"    )
+
+        IF mode = LOG_SCHED THEN
+                help_prompt . user_info = LOG_SCHED_HELP_NAME
+        ELSEIF mode = REP_SCHED THEN
+                help_prompt . user_info = REP_SCHED_HELP_NAME
+        ENDIF
+
+        PROMPT OBJECT cancel_prompt
+                CLASS "STD_PROMPT_BUTTON"
+                WITH (  caption      = GET_USER_MESSAGE (
+                                       "SMP_PROMPT_BUTTON_CANCEL" , 1 ) ,
+                        width        = BUTTON_WIDTH                     ,
+                        column       = 51                               ,
+                        row          = task_form . height - 1           ,
+                        send_lastkey = "EXIT"                           )
+
+        task_form . add_prompt ( prompt_1 )
+        task_form . add_prompt ( prompt_2 )
+        task_form . add_prompt ( prompt_3 )
+        
+
+        IF mode = LOG_SCHED THEN
+                task_form . prompt_objects [ ROUTINE_NAME ] . set_visible ( FALSE )
+                task_form . prompt_objects [ PARAM_NAME ] . set_visible ( FALSE )
+        ENDIF           
+
+        task_form . add_prompt ( printer_prompt )
+        task_form . add_prompt ( current_stat_prompt )
+        task_form . add_prompt ( user_name_prompt )
+
+        task_form . add_prompt ( start_date )
+        task_form . add_prompt ( no_end )
+        task_form . add_prompt ( end_after )
+        task_form . add_prompt ( end_after_occurences )
+        task_form . add_prompt ( end_by )
+        task_form . add_prompt ( end_date )
+        task_form . add_prompt ( run_win_check )
+        task_form . add_prompt ( run_win_interval )
+
+        task_form . add_prompt ( ok_prompt )
+        task_form . add_prompt ( help_prompt )
+        task_form . add_prompt ( cancel_prompt )
+
+        { CHG001 }
+        
+        DECLARE desc
+        
+        PROMPT OBJECT desc
+        ON LINE 4 + prompt_start
+        FROM 17 TO 70
+        FORMAT timerqueue.description
+        
+        task_form.add_display ("Description", 4, 4+prompt_start, PROMPT_RENDITION_BOLD )
+        
+        task_form.add_prompt(desc)
+        task_form . add_prompt ( tab )
+        
+        IF mode = REP_SCHED THEN
+        task_form . add_prompt ( prompt_4 )
+        task_form . add_prompt ( prompt_5 )
+        task_form . add_prompt ( prompt_6 )
+        task_form . add_prompt ( prompt_7 )
+    ENDIF
+
+        IF field_row <> EMPTY THEN
+
+                sched_manager_edit_schedule ( task_form ,
+                                              field_row )
+        ELSE
+
+                count = 1
+                REPEAT
+                        count = count + 1
+                        task_form .
+                        prompt_objects [ count ] .
+                        set_enabled ( FALSE )
+                UNTIL count = HELP_BUTTON
+
+                count = 0
+                REPEAT
+                        count = count + 1
+                        task_form .
+                        prompt_objects [ TAB_FORMS ] .
+                        forms [ 1 ] .
+                        prompt_objects [ count ] .
+                        set_enabled ( FALSE )
+                UNTIL count = DAY_RADIO_2
+        ENDIF
+        
+        
+
+ENDROUTINE { sched_manager_setup_forms }
+
+{******************************************************************************}
+
+ROUTINE sched_manager_toggle_routine ( self )
+
+{ Main toggle routine for build prompt radio buttons.
+*
+* Parameters   : Self  , [STD_PROMPT]
+*
+* Return Value : None
+*
+*******************************************************************************}
+
+        DECLARE form
+
+        form = self . parent_prompt
+        sched_manager_toggle_report_prompts ( form, self )
+
+
+ENDROUTINE
+
+{******************************************************************************}
+
+ROUTINE sched_manager_toggle_report_prompts ( form, radio_prompt )
+
+{ Toggle routine to enable/disable report prompts.
+*
+* Parameters   : Form  , [STD_FORM]
+*        Radio_Prompt, [STD_PROMPT]
+*
+* Return Value : None
+*
+*******************************************************************************}
+
+    IF radio_prompt . tag = RADIO_VGL  THEN
+
+        form . prompt_objects [ RADIO_VGL ] . set_text ( TRUE )
+        form . prompt_objects [ RADIO_DOTNET ] . set_text ( FALSE )
+
+        form . prompt_objects [ REPORT_NAME ] . set_enabled ( TRUE )
+        form . prompt_objects [ ROUTINE_NAME ] . set_enabled ( TRUE )
+        form . prompt_objects [ PARAM_NAME ] . set_enabled ( TRUE )
+        form . prompt_objects [ TASK ] . set_enabled ( FALSE )
+        form . prompt_objects [ TASK_PARAMS ] . set_enabled ( FALSE )
+        
+        form . prompt_objects [ TASK ] . set_text ("")    
+        form . prompt_objects [ TASK_PARAMS ] . set_text ("")    
+
+
+    ELSEIF radio_prompt . tag = RADIO_DOTNET THEN
+
+        form . prompt_objects [ RADIO_DOTNET ] . set_text ( TRUE )
+        form . prompt_objects [ RADIO_VGL ] . set_text ( FALSE )
+        
+        form . prompt_objects [ REPORT_NAME ] . set_enabled ( FALSE )
+        form . prompt_objects [ ROUTINE_NAME ] . set_enabled ( FALSE )
+        form . prompt_objects [ PARAM_NAME ] . set_enabled ( FALSE )
+        form . prompt_objects [ TASK ] . set_enabled ( TRUE )
+        form . prompt_objects [ TASK_PARAMS ] . set_enabled ( TRUE )
+        
+        form . prompt_objects [ REPORT_NAME ] . set_text ("")    
+        form . prompt_objects [ ROUTINE_NAME ] . set_text ("")    
+
+    ENDIF
+
+ENDROUTINE
+
+{******************************************************************************}
+
+        ROUTINE sched_manager_routine_browse ( self )
+
+{
+*
+*
+*******************************************************************************}
+
+        DECLARE routine_array , lib_name
+
+        ARRAY routine_array
+
+        lib_name = STRIP ( self .       
+                           parent_prompt .
+                           prompt_objects [ REPORT_NAME ] .
+                           value )
+
+        vgl_find_routines ( lib_name , routine_array )
+        
+        routine_array [ SIZE_OF_ARRAY ( routine_array ) + 1 ] = NONE
+
+        browse_on_array ( 80 , self . text , routine_array )
+
+        self . repaste ( )
+
+ENDROUTINE { sched_manager_routine_browse }
+
+{******************************************************************************}
+
+        ROUTINE sched_manager_valid_routine ( self )
+
+{
+*
+*
+*******************************************************************************}
+
+        DECLARE lib_name , rout_name , valid_flag
+
+        lib_name = STRIP ( self .
+                           parent_prompt .
+                           prompt_objects [ REPORT_NAME ] .
+                           value )
+
+        rout_name = STRIP ( self .
+                            parent_prompt .
+                            prompt_objects [ ROUTINE_NAME ] .
+                            value )
+
+        IF NOT ( ( rout_name = NONE ) OR ( rout_name = NOTHING ) ) THEN
+
+                valid_flag = vgl_validate_routine ( lib_name , rout_name )
+        ELSE
+                valid_flag = TRUE
+        ENDIF
+
+        IF NOT valid_flag THEN
+                flash_message ( rout_name :
+                                GET_USER_MESSAGE (
+                                "SCHED_MANAGER_INVALID_ROUTINE" , 1 ) :
+                                lib_name , TRUE )
+        ENDIF
+
+        RETURN ( valid_flag )
+
+ENDROUTINE { sched_manager_valid_routine }
+
+{******************************************************************************}
+
+        ROUTINE sched_manager_valid_id ( self )
+
+{
+*
+*
+*******************************************************************************}
+
+        DECLARE task_form , valid_flag , count
+
+        task_form = self . parent_prompt
+        valid_flag = TRUE
+
+    task_form . prompt_objects [ TAB_FORMS ] . set_current_tab ( 1 ) 
+
+        IF NOT ( task_form .
+                 prompt_objects [ REPORT_NAME ] .
+                 value = EMPTY ) THEN
+
+                IF NOT ( task_form . prompt_objects [ REPORT_NAME ] . value =
+                         task_form . prompt_objects [ REPORT_NAME ] .
+                         original_text ) THEN
+
+                        task_form . prompt_objects [ ROUTINE_NAME ] .
+                        set_text ( NONE )
+                ENDIF
+
+                valid_flag = TRUE
+                count = 1
+                REPEAT
+                        count = count + 1
+                        task_form .
+                        prompt_objects [ count ] .
+                        set_enabled ( TRUE )
+                UNTIL count = HELP_BUTTON
+
+                count = 0
+                REPEAT
+                        count = count + 1
+                        task_form .
+                        prompt_objects [ TAB_FORMS ] .
+                        forms [ 1 ] .
+                        prompt_objects [ count ] .
+                        set_enabled ( TRUE )
+                UNTIL count = DAY_RADIO_2
+        ENDIF
+
+        RETURN ( valid_flag )
+
+ENDROUTINE { sched_manager_valid_id }
+
+{******************************************************************************}
+
+        ROUTINE sched_manager_valid_task ( self )
+
+{
+*   Check the task name is not blank and enable prompts.
+*
+*******************************************************************************}
+
+    DECLARE task_form , valid_flag , count
+
+    task_form = self . parent_prompt
+    valid_flag = TRUE
+
+    task_form . prompt_objects [ TAB_FORMS ] . set_current_tab ( 1 ) 
+
+    IF task_form . prompt_objects [ TASK ] . text <> "" THEN
+
+        IF task_form . prompt_objects [ TASK ] . text <>
+           task_form . prompt_objects [ TASK ] . original_text THEN
+            task_form . prompt_objects [ TASK_PARAMS ] . set_text ( "")
+        ENDIF
+
+        task_form . prompt_objects [ TASK_PARAMS ] . set_enabled ( TRUE )
+
+        count = PRINTER_NAME
+        REPEAT
+            task_form . prompt_objects [ count ] . set_enabled ( TRUE )
+            count = count + 1
+        UNTIL count > HELP_BUTTON
+
+        count = 0
+        REPEAT
+            count = count + 1
+            task_form . prompt_objects [ TAB_FORMS ] . forms [ 1 ] . prompt_objects [ count ] . set_enabled ( TRUE )
+        UNTIL count = DAY_RADIO_2
+
+    ENDIF
+
+    RETURN ( valid_flag )
+
+ENDROUTINE { sched_manager_valid_task }
+
+{******************************************************************************}
+
+        ROUTINE sched_manager_valid_start_date ( self )
+
+{
+*
+*
+*******************************************************************************}
+
+        DECLARE retval
+        
+        retval = TRUE
+
+        IF ( BLANK ( self . text ) )
+        OR ( NOT IS_DATE ( self . text ) ) THEN
+        
+                retval = FALSE
+                
+                flash_message ( GET_USER_MESSAGE ( "SCHED_MANAGER_INVALID_START" , 1 ) ,
+                                TRUE                                                   )
+        
+        ENDIF
+        
+        RETURN ( retval )
+        
+ENDROUTINE
+
+{******************************************************************************}
+
+        ROUTINE enter_routine ( self )
+
+{
+*
+*
+*******************************************************************************}
+
+        IF ( self                         .
+             prompt_objects [ TAB_FORMS ] .
+             forms [ 1 ]                  .
+             prompt_objects [ 1 ]         .
+             enabled = TRUE               ) THEN
+
+                self . prompt_objects [ TAB_FORMS ] . browse ( )
+
+        ENDIF
+
+ENDROUTINE
+
+{******************************************************************************}
+
+        ROUTINE sched_manager_setup_daily ( tab , daily_tab )
+
+{
+*
+*
+*******************************************************************************}
+
+        DECLARE radio_1 , radio_2 , prompt_1
+
+        CREATE OBJECT "STD_FORM" , daily_tab
+
+        tab . set_size ( daily_tab )
+
+        daily_tab . header =
+                GET_USER_MESSAGE ( "SCHED_MANAGER_DAILY_HEADER" , 1 )
+        
+        PROMPT OBJECT radio_1
+                AT START_TAB_COLUMN , 1
+                BROWSE ON BOOLEAN
+                WITH ( is_radio         = TRUE                         ,
+                       value            = TRUE                         ,
+                       toggled_routine  = "sched_manager_radio_toggle" ,
+                       vgl_library      = GLOBAL ( "CURRENT_LIBRARY" ) ,
+                       caption          = GET_USER_MESSAGE ( "SCHED_MANAGER_DAILY_EVERY" , 1 ))
+
+        daily_tab . add_prompt ( radio_1 )
+
+        PROMPT OBJECT prompt_1
+                AT START_TAB_COLUMN + 8 ,  radio_1 . row
+                BROWSE ON integer
+                WITH (  value                = 1                      ,
+                        minimum              = 1                      ,
+                        maximum              = 9999                   ,
+                        enter_prompt_routine = "focus_on_day_radio_1" )
+        
+        daily_tab . add_prompt ( prompt_1 )
+
+        daily_tab . add_display (
+                GET_USER_MESSAGE ( "SCHED_MANAGER_DAILY_DAYS" , 1 ) ,
+                START_TAB_COLUMN + 14                               ,
+                radio_1 . row                                       ,
+                PROMPT_RENDITION_BOLD                               )
+
+        PROMPT OBJECT radio_2
+                AT START_TAB_COLUMN , 2
+                BROWSE ON BOOLEAN
+                WITH ( is_radio         = TRUE                         ,
+                       value            = FALSE                        ,
+                       toggled_routine  = "sched_manager_radio_toggle" ,
+                       vgl_library      = GLOBAL ( "CURRENT_LIBRARY" ) ,
+                       caption = GET_USER_MESSAGE ( "SCHED_MANAGER_DAILY_WEEKDAY" , 1 ))
+
+        daily_tab . add_prompt ( radio_2 )
+
+        tab . add_form ( daily_tab )
+
+ENDROUTINE { sched_manager_setup_daily }
+
+{******************************************************************************}
+
+        ROUTINE sched_manager_setup_weekly ( tab , weekly_tab )
+
+{
+*
+*
+*******************************************************************************}
+
+        DECLARE prompt_1 , monday , tuesday , wednesday , thursday , friday ,
+                saturday , sunday
+
+        CREATE OBJECT "STD_FORM" , weekly_tab
+
+        tab . set_size ( weekly_tab )
+
+        weekly_tab . header =
+                GET_USER_MESSAGE ( "SCHED_MANAGER_WEEKLY_HEADER" , 1 )
+        
+        weekly_tab . add_display (
+                GET_USER_MESSAGE ( "SCHED_MANAGER_WEEKLY_EVERY" , 1 ) ,
+                START_TAB_COLUMN                                      ,
+                1                                                     ,
+                PROMPT_RENDITION_BOLD                                 )
+
+        PROMPT OBJECT prompt_1
+                AT START_TAB_COLUMN + 11 , 1
+                BROWSE ON integer
+                WITH ( value   = 1  ,
+                       minimum = 1  ,
+                       maximum = 99 )
+
+        weekly_tab . add_prompt ( prompt_1 )
+
+        weekly_tab . add_display (
+                GET_USER_MESSAGE ( "SCHED_MANAGER_WEEKLY_WEEKS" , 1 ) ,
+                START_TAB_COLUMN + 17                                 ,
+                1                                                     ,
+                PROMPT_RENDITION_BOLD                                 )
+
+        PROMPT OBJECT monday
+                BROWSE ON BOOLEAN
+                AT START_TAB_COLUMN + 3 , 2
+                WITH ( is_check = TRUE  ,
+                       value    = FALSE ,
+                       caption = GET_USER_MESSAGE ( "DATE_DAY_NAMES" , 1 ))
+
+        weekly_tab . add_prompt ( monday )
+
+        PROMPT OBJECT tuesday
+                BROWSE ON BOOLEAN
+                AT START_TAB_COLUMN + 18 , 2
+                WITH ( is_check = TRUE  ,
+                       value    = FALSE ,
+                       caption = GET_USER_MESSAGE ( "DATE_DAY_NAMES" , 2 ))
+
+        weekly_tab . add_prompt ( tuesday )
+
+        PROMPT OBJECT wednesday
+                BROWSE ON BOOLEAN
+                AT START_TAB_COLUMN + 33 , 2
+                WITH ( is_check = TRUE  ,
+                       value    = FALSE ,
+                       caption  = GET_USER_MESSAGE ( "DATE_DAY_NAMES" , 3 ))
+
+        weekly_tab . add_prompt ( wednesday )
+
+        PROMPT OBJECT thursday
+                BROWSE ON BOOLEAN
+                AT START_TAB_COLUMN + 48 , 2
+                WITH ( is_check = TRUE  ,
+                       value    = FALSE ,
+                       caption = GET_USER_MESSAGE ( "DATE_DAY_NAMES" , 4 ))
+
+        weekly_tab . add_prompt ( thursday )
+
+        PROMPT OBJECT friday
+                BROWSE ON BOOLEAN
+                AT START_TAB_COLUMN + 3 , 3
+                WITH ( is_check = TRUE  ,
+                       value    = FALSE ,
+                       caption = GET_USER_MESSAGE ( "DATE_DAY_NAMES" , 5 ))
+
+        weekly_tab . add_prompt ( friday )
+       
+        PROMPT OBJECT saturday
+                BROWSE ON BOOLEAN
+                AT START_TAB_COLUMN + 18 , 3
+                WITH ( is_check = TRUE  ,
+                       value    = FALSE ,
+                       caption = GET_USER_MESSAGE ( "DATE_DAY_NAMES" , 6 ))
+
+        weekly_tab . add_prompt ( saturday )
+        
+        PROMPT OBJECT sunday
+                BROWSE ON BOOLEAN
+                AT START_TAB_COLUMN + 33 , 3
+                WITH ( is_check = TRUE  ,
+                       value    = FALSE ,
+                       caption = GET_USER_MESSAGE ( "DATE_DAY_NAMES" , 7 ))
+        
+        weekly_tab . add_prompt ( sunday )
+
+        tab . add_form ( weekly_tab )
+
+ENDROUTINE { sched_manager_setup_weekly }
+
+{******************************************************************************}
+
+        ROUTINE sched_manager_setup_monthly ( tab , monthly_tab )
+
+{
+*
+*
+*******************************************************************************}
+
+        DECLARE radio_1 , radio_2 , prompt_1 , prompt_2 , prompt_3 , list_1 ,
+                list_2 , week , day
+
+        ARRAY week ARRAYSIZE ( 0 , 2 )
+        ARRAY day  ARRAYSIZE ( 0 , 2 )
+
+        week = sched_manager_populate_week_array ( )
+        day  = sched_manager_populate_day_array ( )
+
+        CREATE OBJECT "STD_FORM" , monthly_tab
+
+        tab . set_size ( monthly_tab )
+
+        monthly_tab . header =  
+                GET_USER_MESSAGE ( "SCHED_MANAGER_MONTHLY_HEADER" , 1 )
+        
+        PROMPT OBJECT radio_1
+                AT START_TAB_COLUMN , 1
+                BROWSE ON BOOLEAN
+                WITH ( is_radio         = TRUE                         ,
+                       value            = TRUE                         ,
+                       toggled_routine  = "sched_manager_radio_toggle" ,
+                       vgl_library      = GLOBAL ( "CURRENT_LIBRARY" ) ,
+                       caption = GET_USER_MESSAGE ( "SCHED_MANAGER_MONTHLY_DAY" , 1 ))
+
+        monthly_tab . add_prompt ( radio_1 )
+
+        PROMPT OBJECT prompt_1
+                AT START_TAB_COLUMN + 8 , radio_1 . row
+                BROWSE ON integer
+                WITH (  value                = 1                        ,
+                        minimum              = 1                        ,
+                        maximum              = 28                       ,
+                        enter_prompt_routine = "focus_on_month_radio_1" )
+        
+        monthly_tab . add_prompt ( prompt_1 )
+
+        monthly_tab . add_display (
+                GET_USER_MESSAGE ( "SCHED_MANAGER_MONTHLY_EVERY" , 1 ) ,
+                START_TAB_COLUMN + 15                                  ,
+                radio_1 . row                                          ,        
+                PROMPT_RENDITION_BOLD                                  )
+
+        PROMPT OBJECT prompt_2
+                AT START_TAB_COLUMN + 23 ,  radio_1 . row
+                BROWSE ON integer
+                WITH (  value                = 1                        ,
+                        minimum              = 1                        ,
+                        maximum              = 12                       ,
+                        enter_prompt_routine = "focus_on_month_radio_1" )
+        
+        monthly_tab . add_prompt ( prompt_2 )
+
+        monthly_tab . add_display (
+                GET_USER_MESSAGE ( "SCHED_MANAGER_MONTHLY_MONTHS" , 1 ) ,
+                START_TAB_COLUMN + 30                                   ,
+                radio_1 . row                                           ,
+                PROMPT_RENDITION_BOLD                                   )
+
+        PROMPT OBJECT radio_2
+                AT START_TAB_COLUMN , 2
+                BROWSE ON BOOLEAN
+                WITH ( is_radio         = TRUE                         ,
+                       value            = FALSE                        ,
+                       toggled_routine  = "sched_manager_radio_toggle" ,
+                       vgl_library      = GLOBAL ( "CURRENT_LIBRARY" ) ,
+                       caption = GET_USER_MESSAGE ( "SCHED_MANAGER_MONTHLY_THE" , 1 ))
+
+        monthly_tab . add_prompt ( radio_2 )
+
+        PROMPT OBJECT list_1
+                ON LINE radio_2 . row
+                FROM START_TAB_COLUMN + 8
+                TO START_TAB_COLUMN + 15
+                CHOOSE OUTOF week
+                WITH ( enter_prompt_routine = "focus_on_month_radio_2" )
+
+        monthly_tab . add_prompt ( list_1 )
+
+        PROMPT OBJECT list_2
+                ON LINE radio_2 . row
+                FROM START_TAB_COLUMN + 17
+                TO START_TAB_COLUMN + 27
+                CHOOSE OUTOF day
+                WITH ( enter_prompt_routine = "focus_on_month_radio_2" )
+
+        monthly_tab . add_prompt ( list_2 )
+
+        monthly_tab . add_display (
+                GET_USER_MESSAGE ( "SCHED_MANAGER_MONTHLY_EVERY" , 1 ) ,
+                START_TAB_COLUMN + 31                                  ,
+                radio_2 . row                                          ,
+                PROMPT_RENDITION_BOLD                                  )
+        
+        PROMPT OBJECT prompt_3
+                AT START_TAB_COLUMN + 39 ,  radio_2 . row
+                BROWSE ON integer
+                WITH (  value                = 1                         ,
+                        minimum              = 1                         ,
+                        maximum              = 36                        ,
+                        enter_prompt_routine = "focus_on_month_radio_2"  )
+
+        monthly_tab . add_prompt ( prompt_3 )
+
+        monthly_tab . add_display (
+                GET_USER_MESSAGE ( "SCHED_MANAGER_MONTHLY_MONTHS" , 1 ) ,
+                START_TAB_COLUMN + 46                                   ,
+                radio_2 . row                                           ,
+                PROMPT_RENDITION_BOLD                                   )
+
+        tab . add_form ( monthly_tab )
+
+ENDROUTINE { sched_manager_setup_monthly }
+
+{******************************************************************************}
+
+        ROUTINE sched_manager_setup_yearly ( tab , yearly_tab )
+
+{
+*
+*
+*******************************************************************************}
+
+        DECLARE radio_1 , radio_2 , prompt_1 , list_1 , list_2 , list_3 ,
+                list_4 , day , week , month
+
+        ARRAY week  ARRAYSIZE ( 0 , 2 )
+        ARRAY day   ARRAYSIZE ( 0 , 2 )
+        ARRAY month ARRAYSIZE ( 0 , 2 )
+
+        week =  sched_manager_populate_week_array ( )
+        day  =  sched_manager_populate_day_array ( )
+        month = sched_manager_populate_month_array ( )
+        
+        CREATE OBJECT "STD_FORM" , yearly_tab
+
+        tab . set_size ( yearly_tab )
+
+        yearly_tab . header = GET_USER_MESSAGE ( "SCHED_MANAGER_YEARLY_HEADER" , 1 )
+        
+        PROMPT OBJECT radio_1
+                AT START_TAB_COLUMN , 1
+                BROWSE ON BOOLEAN
+                WITH ( is_radio         = TRUE                         ,
+                       value            = TRUE                         ,
+                       toggled_routine  = "sched_manager_radio_toggle" ,
+                       caption = GET_USER_MESSAGE ( "SCHED_MANAGER_YEARLY_EVERY" , 1 ))
+
+        yearly_tab . add_prompt ( radio_1 )
+
+        PROMPT OBJECT list_1
+                ON LINE radio_1 . row
+                FROM START_TAB_COLUMN + 8
+                TO START_TAB_COLUMN + 20
+                CHOOSE OUTOF month
+                WITH ( enter_prompt_routine = "focus_on_year_radio_1" )
+
+        yearly_tab . add_prompt ( list_1 )
+
+        PROMPT OBJECT prompt_1
+                AT START_TAB_COLUMN + 21 ,  radio_1 . row
+                BROWSE ON integer
+                WITH (  value                = 1                       ,
+                        minimum              = 1                       ,
+                        maximum              = 31                      ,
+                        enter_prompt_routine = "focus_on_year_radio_1" )
+
+        yearly_tab . add_prompt ( prompt_1 )
+
+        PROMPT OBJECT radio_2
+                AT START_TAB_COLUMN , 2
+                BROWSE ON BOOLEAN
+                WITH ( is_radio         = TRUE                         ,
+                       value            = FALSE                        ,
+                       toggled_routine  = "sched_manager_radio_toggle" ,
+                       caption = GET_USER_MESSAGE ( "SCHED_MANAGER_YEARLY_THE" , 1 ))
+
+        yearly_tab . add_prompt ( radio_2 )
+
+        PROMPT OBJECT list_2
+                ON LINE radio_2 . row
+                FROM START_TAB_COLUMN + 8
+                TO START_TAB_COLUMN + 15
+                CHOOSE OUTOF week
+                WITH ( enter_prompt_routine = "focus_on_year_radio_2" )
+
+
+        yearly_tab . add_prompt ( list_2 )
+
+        PROMPT OBJECT list_3
+                ON LINE radio_2 . row
+                FROM START_TAB_COLUMN + 17
+                TO START_TAB_COLUMN + 27
+                CHOOSE OUTOF day
+                WITH ( enter_prompt_routine = "focus_on_year_radio_2" )
+
+        yearly_tab . add_prompt ( list_3 )
+
+        yearly_tab . add_display (
+                GET_USER_MESSAGE ( "SCHED_MANAGER_YEARLY_OF" , 1 ) ,
+                START_TAB_COLUMN + 31                              ,
+                radio_2 . row                                      ,
+                PROMPT_RENDITION_BOLD                              )
+        
+        PROMPT OBJECT list_4
+                ON LINE radio_2 . row
+                FROM START_TAB_COLUMN + 34
+                TO START_TAB_COLUMN + 46
+                CHOOSE OUTOF month
+                WITH ( enter_prompt_routine = "focus_on_year_radio_2" )
+
+        yearly_tab . add_prompt ( list_4 )
+
+        tab . add_form ( yearly_tab )
+
+ENDROUTINE { sched_manager_setup_yearly }
+
+{******************************************************************************}
+
+        ROUTINE sched_manager_setup_frequency ( tab , frequency_tab )
+{
+*
+*
+*******************************************************************************}
+
+        DECLARE prompt_1 , prompt_2 , radio_1 , radio_2 , maintain_prompt
+
+        CREATE OBJECT "STD_FORM" , frequency_tab
+
+        tab . set_size ( frequency_tab )
+
+        frequency_tab . header =
+                GET_USER_MESSAGE ( "SCHED_MANAGER_FREQUENCY_HEADER" , 1 )
+
+        frequency_tab . return_behaviour = FORM_RETURN_STAY
+
+        PROMPT OBJECT radio_1
+                AT START_TAB_COLUMN , 1
+                BROWSE ON BOOLEAN
+                WITH ( is_radio         = TRUE                         ,
+                       value            = TRUE                         ,
+                       toggled_routine  = "sched_manager_radio_toggle" ,
+                       caption = GET_USER_MESSAGE ( "SCHED_MANAGER_FREQUENCY_RECURR" , 1 ))
+
+        frequency_tab . add_prompt ( radio_1 )
+
+        PROMPT OBJECT prompt_1
+                AT START_TAB_COLUMN + 27 ,  1
+                BROWSE ON INTERVAL
+                WITH ( value = INTERVAL ( 1 ) ,
+                       minimum = "0 00:00:01.00" ,
+                       enter_prompt_routine = "focus_on_freq_radio_1" )
+
+        frequency_tab . add_prompt ( prompt_1 )
+
+        PROMPT OBJECT radio_2
+                AT START_TAB_COLUMN , 2
+                BROWSE ON BOOLEAN
+                WITH ( is_radio         = TRUE                         ,
+                       value            = FALSE                        ,
+                       toggled_routine  = "sched_manager_radio_toggle" ,
+                       caption = GET_USER_MESSAGE ( "SCHED_MANAGER_FREQUENCY_TIM_SCHED" , 1 ))
+
+        frequency_tab . add_prompt ( radio_2 )
+
+        PROMPT OBJECT prompt_2
+                AT START_TAB_COLUMN + 27 ,  2
+                BROWSE ON TIMER_SCHEDULE
+                WITH ( enter_prompt_routine = "focus_on_freq_radio_2" )
+
+        frequency_tab . add_prompt ( prompt_2 )
+
+        PROMPT OBJECT maintain_prompt
+                CLASS "STD_PROMPT_BUTTON"
+                WITH (  caption      =
+                        GET_USER_MESSAGE ( "SCHED_MANAGER_MAINTAIN" , 1 ) ,
+                        width        = 20                                 ,
+                        column       = 42                                 ,
+                        row          = 3                                  ,
+                        mouse_click_routine = "sched_manager_timer_menu"  )
+
+        frequency_tab . add_prompt ( maintain_prompt )
+
+        tab . add_form ( frequency_tab )
+
+ENDROUTINE { sched_manager_setup_frequency }
+
+{******************************************************************************}
+
+        ROUTINE sched_manager_timer_menu ( self )
+{
+*
+*
+*******************************************************************************}
+
+        DECLARE menu , result , dummy , count
+
+        ARRAY menu
+
+        dummy = EMPTY
+        count = 0
+
+        REPEAT
+                count = count + 1
+                menu [ count ] =
+                        GET_USER_MESSAGE ( "SCHED_MANAGER_TIM_MENU" , count )
+        UNTIL count = 12
+
+        result = client_do_popup_menu ( menu , 0 , 0 , 0 )
+
+        IF ( result = menu [ 1 ] ) THEN
+        
+                CALL_ROUTINE "ADDOPTION"
+                IN LIBRARY "$LTE_TIMER_SCHEDULE"
+                USING dummy
+
+        ELSEIF ( result = menu [ 2 ] ) THEN
+
+                CALL_ROUTINE "COPYOPTION"
+                IN LIBRARY "$LTE_TIMER_SCHEDULE"
+                USING dummy
+
+        ELSEIF ( result = menu [ 3 ] ) THEN
+
+                CALL_ROUTINE "MODIFYOPTION"
+                IN LIBRARY "$LTE_TIMER_SCHEDULE"
+                USING dummy
+
+        ELSEIF ( result = menu [ 4 ] ) THEN
+
+                CALL_ROUTINE "DISPLAYOPTION"
+                IN LIBRARY "$LTE_TIMER_SCHEDULE"
+                USING dummy
+
+        ELSEIF ( result = menu [ 6 ] ) THEN
+
+                CALL_ROUTINE "PRINTOPTION"
+                IN LIBRARY "$LTE_TIMER_SCHEDULE"
+                USING dummy
+
+        ELSEIF ( result = menu [ 7 ] ) THEN
+
+                CALL_ROUTINE "LISTOPTION"
+                IN LIBRARY "$LTE_TIMER_SCHEDULE"
+                USING dummy
+
+        ELSEIF ( result = menu [ 9 ] ) THEN
+
+                CALL_ROUTINE "REMOVEOPTION"
+                IN LIBRARY "$LTE_TIMER_SCHEDULE"
+                USING dummy
+
+        ELSEIF ( result = menu [ 10 ] ) THEN
+
+                CALL_ROUTINE "RESTOREOPTION"
+                IN LIBRARY "$LTE_TIMER_SCHEDULE"
+                USING dummy
+
+        ELSEIF ( result = menu [ 12 ] ) THEN
+
+                CALL_ROUTINE "BSMPTIMERSCHEDULETEST"
+                IN LIBRARY "$BSMP_TIMER_SCHEDULE"
+                USING dummy
+
+        ENDIF
+
+ENDROUTINE { sched_manager_timer_menu }
+
+{******************************************************************************}
+
+        ROUTINE sched_manager_radio_toggle ( self )
+{
+*
+*
+*******************************************************************************}
+
+        DECLARE form , radio
+
+        DECLARE manager , daily , monthly , yearly , frequency
+
+        form  = self . parent_prompt
+        radio = self . tag
+
+        manager   = GET_USER_MESSAGE ( "SCHED_MANAGER_ENTRY_FORM_HEADER", 1 )
+        daily     = GET_USER_MESSAGE ( "SCHED_MANAGER_DAILY_HEADER"     , 1 )
+        monthly   = GET_USER_MESSAGE ( "SCHED_MANAGER_MONTHLY_HEADER"   , 1 )
+        yearly    = GET_USER_MESSAGE ( "SCHED_MANAGER_YEARLY_HEADER"    , 1 )
+        frequency = GET_USER_MESSAGE ( "SCHED_MANAGER_FREQUENCY_HEADER" , 1 )
+
+        IF form . header = manager THEN
+
+                IF ( radio = NO_END_DATE ) THEN
+                        form . prompt_objects [ END_AFTER_DATE ] .      
+                        set_text ( NOT self . value )
+                        form . prompt_objects [ END_BY_DATE ] .
+                        set_text ( NOT self . value )
+                ENDIF
+
+                IF ( radio = END_AFTER_DATE  ) THEN
+                        form . prompt_objects [ NO_END_DATE ] .
+                        set_text ( NOT self . value )
+                        form . prompt_objects [ END_BY_DATE ] .
+                        set_text ( NOT self . value )
+                ENDIF
+
+                IF ( radio = END_BY_DATE ) THEN
+                        form . prompt_objects [ NO_END_DATE ] .
+                        set_text ( NOT self . value )
+                        form . prompt_objects [ END_AFTER_DATE ] .
+                        set_text ( NOT self . value )
+                ENDIF
+        ENDIF
+
+        IF ( form . header = yearly  ) OR
+           ( form . header = monthly ) THEN
+
+                IF ( radio = YEAR_RADIO_1 ) THEN
+                        form . prompt_objects [ YEAR_RADIO_2 ] .
+                        set_text ( NOT self . value )
+                ENDIF
+
+                IF ( radio = YEAR_RADIO_2  ) THEN
+                        form . prompt_objects [ YEAR_RADIO_1 ] .
+                        set_text ( NOT self . value )
+                ENDIF
+        ENDIF
+
+        IF ( form . header = daily     ) OR
+           ( form . header = frequency ) THEN
+
+                IF ( radio = DAY_RADIO_1 ) THEN
+                        form . prompt_objects [ DAY_RADIO_2 ] .
+                        set_text ( NOT self . value )
+                ENDIF
+
+                IF ( radio = DAY_RADIO_2  ) THEN
+                        form . prompt_objects [ DAY_RADIO_1 ] .
+                        set_text ( NOT self . value )
+                ENDIF
+        ENDIF
+
+ENDROUTINE { sched_manager_radio_toggle }
+
+{******************************************************************************}
+
+        ROUTINE focus_on_day_radio_1 ( self )
+{
+*
+*
+******************************************************************************}
+
+        DECLARE form
+        form = self . parent_prompt
+
+        form . prompt_objects [ DAY_RADIO_1 ] . set_text ( TRUE )
+        form . prompt_objects [ DAY_RADIO_2 ] .set_text ( FALSE )
+
+ENDROUTINE
+
+{******************************************************************************}
+
+        ROUTINE focus_on_month_radio_1 ( self )
+{
+*
+*
+*******************************************************************************}
+        
+        DECLARE form
+        form = self . parent_prompt
+
+        form . prompt_objects [ MONTH_RADIO_1 ] . set_text ( TRUE )
+        form . prompt_objects [ MONTH_RADIO_2 ] . set_text ( FALSE )
+
+ENDROUTINE
+
+{******************************************************************************}
+
+        ROUTINE focus_on_month_radio_2 ( self )
+{
+*
+*
+*******************************************************************************}
+        
+        DECLARE form
+        form = self . parent_prompt
+
+        form . prompt_objects [ MONTH_RADIO_1 ] . set_text ( FALSE )
+        form . prompt_objects [ MONTH_RADIO_2 ] . set_text ( TRUE )
+
+ENDROUTINE
+
+{******************************************************************************}
+
+        ROUTINE focus_on_year_radio_1 ( self )
+{
+*
+*
+*******************************************************************************}
+
+        DECLARE form
+        form = self . parent_prompt
+
+        form . prompt_objects [ YEAR_RADIO_1 ] . set_text ( TRUE )
+        form . prompt_objects [ YEAR_RADIO_2 ] . set_text ( FALSE )
+
+ENDROUTINE
+
+{******************************************************************************}
+
+        ROUTINE focus_on_year_radio_2 ( self )
+{
+*
+*
+*******************************************************************************}
+
+        DECLARE form
+        form = self . parent_prompt
+
+        form . prompt_objects [ YEAR_RADIO_1 ] . set_text ( FALSE )
+        form . prompt_objects [ YEAR_RADIO_2 ] . set_text ( TRUE )
+
+ENDROUTINE
+
+{******************************************************************************}
+
+        ROUTINE focus_on_freq_radio_1 ( self )
+{
+*
+*
+*******************************************************************************}
+
+        DECLARE form
+        form = self . parent_prompt
+
+        form . prompt_objects [ FREQ_RADIO_1 ] . set_text ( TRUE )
+        form . prompt_objects [ FREQ_RADIO_2 ] . set_text ( FALSE )
+
+ENDROUTINE
+
+{******************************************************************************}
+
+        ROUTINE focus_on_freq_radio_2 ( self )
+{
+*
+*
+*******************************************************************************}
+        
+        DECLARE form
+        form = self . parent_prompt
+
+        form . prompt_objects [ FREQ_RADIO_1 ] . set_text ( FALSE )
+        form . prompt_objects [ FREQ_RADIO_2 ] . set_text ( TRUE )
+
+ENDROUTINE
+
+{******************************************************************************}
+
+        ROUTINE focus_on_end_after ( self )
+{
+*
+*
+*******************************************************************************}
+
+        DECLARE form
+        form = self . parent_prompt
+
+        form . prompt_objects [ NO_END_DATE ] . set_text ( FALSE )
+        form . prompt_objects [ END_BY_DATE ] . set_text ( FALSE )
+        form . prompt_objects [ END_AFTER_DATE ] . set_text ( TRUE )
+
+ENDROUTINE
+
+{******************************************************************************}
+
+        ROUTINE focus_on_end_by ( self )
+{
+*
+*
+*******************************************************************************}
+
+
+        DECLARE form
+        form = self . parent_prompt
+
+        form . prompt_objects [ NO_END_DATE ] . set_text ( FALSE )
+        form . prompt_objects [ END_AFTER_DATE ] . set_text ( FALSE )
+        form . prompt_objects [ END_BY_DATE ] . set_text ( TRUE )
+
+ENDROUTINE
+
+{******************************************************************************}
+
+        ROUTINE set_run_win_check ( self )
+{
+*
+*
+*******************************************************************************}
+
+        DECLARE form
+        form = self . parent_prompt
+
+        form . prompt_objects [ RUN_WIN_CHECK_BOX ] . set_text ( TRUE )
+
+ENDROUTINE      
+
+{******************************************************************************}
+
+        ROUTINE sched_manager_populate_day_array
+{
+*
+*
+*******************************************************************************}
+
+        DECLARE count , day
+
+        ARRAY day ARRAYSIZE ( NO_DAY_CHOICES , 2 )
+        count = 0
+
+        REPEAT
+                count = count + 1
+
+                IF count > 3 THEN
+                        day [ count , 1 ] =
+                        GET_USER_MESSAGE ( "DATE_DAY_NAMES" , count - 3 )
+                ELSE
+                        day [ count , 1 ] =
+                        GET_USER_MESSAGE ( "SCHED_MANAGER_DAY_TYPE", count )
+                ENDIF
+
+                day [ count , 2 ] = count
+
+        UNTIL count = NO_DAY_CHOICES
+
+        RETURN ( day )
+
+ENDROUTINE { sched_manager_populate_day_array }
+
+{******************************************************************************}
+
+        ROUTINE sched_manager_populate_week_array
+{
+*
+*
+*******************************************************************************}
+
+        DECLARE count , week
+
+        ARRAY week ARRAYSIZE ( NO_WEEK_CHOICES , 2 )
+        count = 0
+
+        REPEAT
+                count = count + 1
+                week [ count , 1 ] =
+                GET_USER_MESSAGE ( "SCHED_MANAGER_WEEK" , count )
+                week [ count , 2 ] = count
+
+        UNTIL count = NO_WEEK_CHOICES
+
+        RETURN ( week )
+
+ENDROUTINE { sched_manager_populate_week_array }
+
+{******************************************************************************}
+
+        ROUTINE sched_manager_populate_month_array
+{
+*
+*
+*******************************************************************************}
+
+        DECLARE month , count
+
+        ARRAY month ARRAYSIZE ( NO_MONTH_CHOICES , 2 )
+        count = 0
+
+        REPEAT
+                count = count + 1
+                month [ count , 1 ] =
+                GET_USER_MESSAGE ( "DATE_MONTH_TEXT_" : STRIP ( count ) , 1 )
+                month [ count , 2 ] = count
+
+        UNTIL count = NO_MONTH_CHOICES
+
+        RETURN ( month )
+
+ENDROUTINE { sched_manager_populate_month_array }
+
+{******************************************************************************}
+
+        ROUTINE sched_manager_populate_run_win_array
+{
+*
+*
+*******************************************************************************}
+
+        DECLARE run_win , count
+
+        ARRAY run_win ARRAYSIZE ( NO_INT_CHOICES , 2 )
+        count = 0
+
+        REPEAT
+                count = count + 1
+                run_win [ count , 1 ] =
+                GET_USER_MESSAGE ( "SCHED_MANAGER_INTERVAL_TEXT" , count )
+                run_win [ count , 2 ] = INTERVAL (
+                GET_USER_MESSAGE ( "SCHED_MANAGER_INTERVAL_VALUES" , count ) )
+
+        UNTIL count = NO_INT_CHOICES    
+
+ENDROUTINE { sched_manager_populate_run_win_array }
+
+{******************************************************************************}
+
+        ROUTINE sched_manager_values_are_ok ( task_form )
+{
+*
+*
+*******************************************************************************}
+
+        DECLARE tab , count , valid_values , reason
+
+        reason = ""
+
+        valid_values = FALSE
+
+        tab = task_form .
+              prompt_objects [ TAB_FORMS ] .
+              forms [ task_form . prompt_objects [ TAB_FORMS ] . selected ]
+
+        { Validation for the daily tab }
+
+        IF task_form . prompt_objects [ TAB_FORMS ] . selected = 1 THEN
+
+                valid_values = TRUE
+        ENDIF
+
+        { Validation for the weekly tab }
+
+        IF task_form . prompt_objects [ TAB_FORMS ] . selected = 2 THEN
+
+                count = 1
+                REPEAT
+                        count = count + 1
+                        IF tab . prompt_objects [ count ] . value = TRUE THEN
+                                valid_values = TRUE
+                        ENDIF
+                UNTIL count = 8
+
+                IF NOT ( valid_values ) THEN
+
+                        reason = " - " : GET_USER_MESSAGE ( "SCHED_MANAGER_NO_DAYS" , 1 )
+
+                ENDIF
+        ENDIF
+
+        { Validation for the monthly tab }
+
+        IF task_form . prompt_objects [ TAB_FORMS ] . selected = 3 THEN
+
+                valid_values = TRUE             
+        ENDIF
+
+        { Validation for the yearly tab }
+
+        IF task_form . prompt_objects [ TAB_FORMS ] . selected = 4 THEN
+
+                valid_values = TRUE
+
+                IF tab . prompt_objects [ 1 ] . value THEN
+
+                        IF ( tab . prompt_objects [ 3 ] . value >= 29 ) AND
+                           ( tab . prompt_objects [ 2 ] . value = 2 ) THEN
+
+                                valid_values = FALSE
+
+                        ENDIF
+
+                        IF ( tab . prompt_objects [ 3 ] . value = 31 ) THEN
+
+                                IF ( tab . prompt_objects [ 2 ] . value = 4  ) OR
+                                   ( tab . prompt_objects [ 2 ] . value = 6  ) OR
+                                   ( tab . prompt_objects [ 2 ] . value = 9  ) OR
+                                   ( tab . prompt_objects [ 2 ] . value = 11 ) THEN
+
+                                        valid_values = FALSE
+                                ENDIF
+
+                        ENDIF
+                ENDIF
+
+        ENDIF
+
+        { Validation for the frequency tab }
+
+        IF task_form . prompt_objects [ TAB_FORMS ] . selected = 5 THEN
+
+                valid_values = TRUE
+        ENDIF
+
+        IF NOT ( valid_values ) THEN
+
+                flash_message ( GET_USER_MESSAGE ( "SCHED_MANAGER_NOT_VALID" , 1 ) :
+                                reason , TRUE )
+
+    ELSE
+
+        { Finally check that the start date is after now }
+
+            IF (( task_form . prompt_objects [ STARTING_DATE ] . value + INTERVAL ( "0 00:05" )) < NOW ) THEN
+            valid_values = confirm_with_message ( "SCHED_MANAGER_PAST_DATE" )
+            ENDIF
+
+        ENDIF
+
+        RETURN ( valid_values )
+
+ENDROUTINE { sched_manager_values_are_ok }
+
+{******************************************************************************}
+
+        ROUTINE suspend_radio ( self )
+{
+*
+*
+*******************************************************************************}
+
+        DECLARE del_exp
+
+        START WRITE TRANSACTION "Suspend expired schedules"
+
+        del_exp = SELECT config_header . identity
+                  FOR UPDATE
+                  WHERE identity = "SCHEDULE_DELETE_EXPIRED"
+
+        IF del_exp <> EMPTY THEN
+
+                SET GLOBAL "SCHEDULE_DELETE_EXPIRED" TO "FALSE"
+                ASSIGN config_header . value = FALSE
+                UPDATE config_header
+                COMMIT
+                self . set_text ( TRUE )
+                self . parent_prompt .
+                        prompt_objects [ DEL_RADIO ] . set_text ( FALSE )
+        ELSE
+                ROLLBACK
+
+        ENDIF
+
+ENDROUTINE
+
+{******************************************************************************}
+
+        ROUTINE delete_radio ( self )
+{
+*
+*
+*******************************************************************************}
+
+        DECLARE del_exp
+
+        START WRITE TRANSACTION "Delete expired schedules"
+
+        del_exp = SELECT config_header . identity
+                  FOR UPDATE
+                  WHERE identity = "SCHEDULE_DELETE_EXPIRED"
+
+        IF del_exp <> EMPTY THEN
+
+                SET GLOBAL "SCHEDULE_DELETE_EXPIRED" TO "TRUE"
+                ASSIGN config_header . value = TRUE
+                UPDATE config_header
+                COMMIT
+                self . set_text ( TRUE )
+                self . parent_prompt .
+                        prompt_objects [ SUSP_RADIO ] . set_text ( FALSE )
+        ELSE
+                ROLLBACK
+        ENDIF
+
+ENDROUTINE
+
+{******************************************************************************}
+
+        ROUTINE sched_manager_check_item_exists ( VALUE record , VALUE silent )
+
+{
+*
+*
+*******************************************************************************}
+
+        IF record <> EMPTY THEN
+
+                record = SELECT timerqueue . entry_number
+                         WHERE entry_number = record
+
+                IF record = EMPTY THEN
+
+                        IF NOT ( silent ) THEN
+
+                                flash_message (
+                                        GET_USER_MESSAGE ( "SCHED_MANAGER_NOT_VALID" ,
+                                                           1                         ) ,
+                                        TRUE                                           )
+        
+                        ENDIF
+
+                ENDIF
+
+        ENDIF
+
+        RETURN ( record <> EMPTY )
+
+ENDROUTINE { sched_manager_check_item_exists }
+
+
+
+

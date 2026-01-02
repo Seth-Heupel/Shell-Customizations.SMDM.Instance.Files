@@ -1,0 +1,141 @@
+{******************************************************************************
+*
+* Module Name   : $BACKCOMM.RPF
+*
+* Purpose       :   This report will commit all cancelled and authorised 
+*		    samples and all authorised jobs that were logged in before 
+*                   a specified interval. The interval_to_last_date variable 
+*                   should be set and the report submitted to the background 
+*                   with a specified repeat interval.        
+*
+* Document Ref. : SE/T/TVGL-WORK-REPORTS/1/3
+*
+* Specification : 
+*
+* Portability   : Not Checked
+*
+* Re-entrant    : 
+*
+*******************************************************************************}
+
+{ -------------------------Enter the number of days----------------------------}
+
+JOIN LIBRARY $LIB_COMM
+
+{ By default samples and jobs that were authorised 120 days ago are committed.
+  To change from date_authorised to another sample/job date field, change the
+  constants below }
+
+CONSTANT SAMPLE_DATE_FIELD = "DATE_AUTHORISED"
+CONSTANT JOB_DATE_FIELD    = "DATE_AUTHORISED"
+
+interval_to_last_date = "0365 00:00"
+
+{------------------------------------------------------------------------------}
+
+last_date = now - interval ( interval_to_last_date )
+
+commit_samples ( "A" )  { commit authorised samples }
+commit_samples ( "R" )  { commit rejected samples }
+commit_samples ( "X" )  { commit cancelled samples }
+commit_requests ( "A" ) { commit authorised jobs }
+commit_requests ( "R" ) { commit rejected jobs }
+commit_requests ( "X" ) { commit cancelled jobs }
+
+{------------------------------------------------------------------------------}
+
+ROUTINE commit_samples ( VALUE required_status )
+
+    DECLARE samp_counter , samp_array , sampid , loop_counter ,  tab_1
+
+    tab_1 = GET_USER_MESSAGE ( "BACKCOMM_TAB_1" , 1 )      
+
+    REPEAT
+
+        { Select a 'chunk' of a hundred or less samples to commit }
+
+        ARRAY samp_array ARRAY_SIZE ( 100 )
+        sampid = SELECT sample.id_numeric
+                 WHERE ( ( status = required_status ) AND 
+                         ( 'SAMPLE_DATE_FIELD' <= last_date  ) )
+
+        samp_counter = 0
+        WHILE ( ( sampid <> EMPTY ) AND ( samp_counter < 100 ) ) DO
+
+            IF ( sampid <> "         0" ) THEN
+                samp_counter = samp_counter +1
+                samp_array [ samp_counter ] = sampid
+            ENDIF
+
+            NEXT sample
+            sampid = SELECT sample.id_numeric
+
+        ENDWHILE
+
+        loop_counter = 1
+        WHILE ( loop_counter <= samp_counter ) DO
+
+literal
+$tab_1___________________________________ : $samp_array[loop_counter]
+$endliteral
+
+            background ( samp_array [ loop_counter ] , EMPTY , "" )
+        
+            loop_counter = loop_counter +1
+
+        ENDWHILE
+
+    UNTIL ( sampid = EMPTY )
+
+RETURN
+
+ENDROUTINE {commit_samples}
+
+{------------------------------------------------------------------------------}
+
+ROUTINE commit_requests ( VALUE required_status )
+
+    DECLARE job_counter , job_array , requestid , loop_counter , tab_2
+
+    tab_2 = GET_USER_MESSAGE ( "BACKCOMM_TAB_2" , 1 )
+
+    REPEAT
+
+        { Select a 'chunk' of a hundred or less jobs to commit }
+
+        ARRAY job_array ARRAY_SIZE ( 100 )
+        requestid = SELECT job_header.job_name 
+                 WHERE ( ( status = required_status   ) AND 
+                         ( 'JOB_DATE_FIELD' <= last_date ) )
+
+        job_counter = 0
+        WHILE ( ( requestid <> EMPTY ) AND ( job_counter < 100 ) ) DO
+
+            job_counter = job_counter +1
+            job_array [ job_counter ] = requestid
+
+            NEXT job_header
+            requestid = SELECT job_header.job_name 
+
+        ENDWHILE
+
+        loop_counter = 1
+        WHILE ( loop_counter <= job_counter ) DO
+
+literal
+$tab_2___________________________________ : $job_array[loop_counter]
+$endliteral
+
+            background_job ( job_array [ loop_counter ] , EMPTY )
+
+            loop_counter = loop_counter +1
+
+        ENDWHILE
+
+    UNTIL ( requestid = EMPTY )
+
+RETURN
+
+ENDROUTINE {commit_requests}
+{------------------------------------------------------------------------------}
+

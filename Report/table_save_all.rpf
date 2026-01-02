@@ -1,0 +1,134 @@
+{******************************************************************************
+*
+* Module Name   : TABLE_SAVER_ALL
+*
+* Purpose       : Table save all tables into a sub-directory of smp$datafiles
+*
+* Document Ref. : 
+*
+* Specification :
+*
+* Portability   : Not Checked
+*
+* Re-entrant    : No
+*
+*******************************************************************************}
+
+SET COMPILE_OPTION DECLARE
+SET NOTPROTECTED
+SET NAME "DEFER/"                      
+ENABLE WINDOWS
+
+JOIN STANDARD_LIBRARY STD_ARRAY
+JOIN STANDARD_LIBRARY STD_DATABASE
+JOIN STANDARD_LIBRARY STD_STRUCTURE
+
+JOIN LIBRARY $LIB_UTILS
+JOIN LIBRARY $TABLE_LOAD_SAVE_LIB
+
+table_save_all ( )
+
+{******************************************************************************}
+
+ROUTINE table_save_all
+
+	DECLARE tables ,
+	        table_no ,
+	        max_table ,
+	        table_nam ,
+	        is_view ,
+	        save_directory ,
+	        ok
+
+	ok = TRUE
+
+	get_table_names ( tables )
+
+	max_table = size_of_array ( tables )
+
+	save_directory = make_specific_directory ( )
+
+	table_no = 1
+
+	WHILE ( table_no <= max_table ) AND ok DO
+
+		table_nam = STRIP ( tables [ table_no, 1 ])
+
+		get_table_details 'table_nam' ,
+		                  "IS_VIEW"   ,
+		                  is_view
+
+		IF NOT is_view THEN
+
+			ok = table_save_all_save_table ( save_directory ,
+			                                 table_nam      )
+
+		ENDIF
+
+		table_no = table_no + 1
+
+	ENDWHILE
+
+ENDROUTINE
+
+{******************************************************************************}
+
+ROUTINE table_save_all_save_table ( VALUE save_directory ,
+                                    VALUE table_nam      )
+
+	DECLARE list_of_fields  ,
+	        selection_array ,
+	        file_name       ,
+	        return_message  ,
+	        ok
+
+	ARRAY list_of_fields ARRAYSIZE ( 0 )
+
+	get_field_names_without_aliases ( table_nam, list_of_fields )
+
+	table_load_save_lib_filter_fields ( table_nam, list_of_fields )
+
+	ARRAY selection_array
+
+	table_load_save_lib_default_select ( table_nam, selection_array )
+
+	file_name = save_directory : strip ( table_nam ) : ".csv"
+
+	ok = output_csv_file( file_name       ,
+	                      table_nam       ,
+	                      list_of_fields  ,
+	                      selection_array ,
+	                      FALSE           ,
+	                      return_message  )
+
+	IF NOT ok THEN
+
+		FLASH_MESSAGE ( return_message, TRUE )
+
+	ENDIF
+
+	RETURN ( ok )
+
+ENDROUTINE
+
+{******************************************************************************}
+
+ROUTINE make_specific_directory
+
+	DECLARE new_directory
+
+	SET DATE FORMAT "YYYYMZDZ-H24MI"
+
+	new_directory = lib_utils_logical_to_string ( "SMP$DATAFILES" ) : "\" : NOW
+
+	RESTORE DATE FORMAT
+
+	SPAWN "mkdir " : ASCII (34) : new_directory : ASCII (34)
+
+	RETURN ( new_directory : "\" )
+
+ENDROUTINE
+
+{******************************************************************************}
+{******************************************************************************}
+{******************************************************************************}

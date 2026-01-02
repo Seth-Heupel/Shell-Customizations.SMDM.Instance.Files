@@ -1,0 +1,99 @@
+{*****************************************************************************
+*
+* Module Name   : 
+*
+* Purpose       : 
+*                 
+*
+* Portability   : All platforms
+*
+* Document Ref. : CS/T/
+*
+* Re-entrant    : No
+*
+* Specification :
+*
+******************************************************************************
+* Modification History
+*
+* Version   Date         Author           Modify Details
+******************************************************************************
+* 1.0       25.Jan.10    Barry Hamilton   Created
+* 1.1 	    04.Jan.16    Gary Walters     Modify ResetQueue to Update
+******************************************************************************}
+
+SET NOTPROTECTED
+SET COMPILE_OPTION DECLARE
+ENABLE WINDOWS
+SET NAME "DEFER/"
+
+
+GLOBAL ROUTINE NotificationQueue(VALUE key0, VALUE type, VALUE plant, VALUE distList, VALUE ccList)
+
+DECLARE rkey, status
+
+    rkey = PAD(type," ",15):key0
+    
+    RESERVE ENTRY email_queue,rkey,status
+    
+    IF ( status != EMPTY ) THEN
+    
+        status = SELECT email_queue.key0 FOR UPDATE
+                 WHERE key0 = key0
+                 AND notification = type
+                 
+        IF ( (status != EMPTY) AND (status != LOCKED) ) THEN
+        
+            ASSIGN email_queue.processed = FALSE
+            ASSIGN email_queue.status = ""
+            
+        ENDIF
+        
+    ENDIF
+    
+    ASSIGN email_queue.queue_date = NOW
+    ASSIGN email_queue.plant = plant
+    ASSIGN email_queue.distribution = distList
+    ASSIGn email_queue.cc_distribution = ccList
+    
+    IF ( status = EMPTY ) THEN
+    
+        UPDATE email_queue
+        
+    ENDIF
+        
+ENDROUTINE
+
+ROUTINE ResetQueue (  rmb_object, object, list )
+
+    DECLARE  status, key0
+
+    list.setFirst()
+    
+    START WRITE TRANSACTION "Reset Queue"
+    
+    WHILE (list.current != EMPTY) DO
+
+ 	key0 = SELECT email_queue.key0 IN OBJECT list.current 
+        status = SELECT email_queue.key0 FOR UPDATE
+                 WHERE key0 = key0
+ 
+	IF ( (status != EMPTY) AND (status != LOCKED) ) THEN   
+          ASSIGN email_queue.processed = FALSE
+          ASSIGN email_queue.status  = ""        
+          UPDATE email_queue
+	  COMMIT
+         
+        ENDIF
+
+        list.setNext()
+
+    
+    ENDWHILE
+
+    
+
+  
+
+ENDROUTINE
+

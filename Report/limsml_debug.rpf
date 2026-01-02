@@ -1,0 +1,64 @@
+{*****************************************************************************
+*
+* Module Name   :
+*
+* Purpose       :
+*
+*
+* Portability   : All platforms
+*
+* Document Ref. : CS/T/
+*
+* Re-entrant    : No
+*
+* Specification :
+*
+******************************************************************************
+* Modification History
+*
+* Version   Date        Author           Modify Details
+******************************************************************************
+* 1.0       7/01/2005  Barry Hamilton   Created
+******************************************************************************}
+
+{ 
+  How to run:
+  Set the SM config item WEB_LIMSML_SAVE to Yes and restart IIS / component services.
+  All subsequent LIMSML response / requests will be saved t smp$textreports.
+  Find the file you want to debug - then change the fname variable below.  Compile
+  and step into this report.  Set a breakpoint at $LIMSML_PROCESS, near line number 262:
+    MENUPROC proc_num PARAMETERS self
+     ...
+  step into the MENUPROC to get into your code.
+}
+
+SET NOTPROTECTED
+SET COMPILE_OPTION DECLARE
+ENABLE WINDOWS
+SET NAME "DEFER/"
+
+JOIN LIBRARY $limsml_process
+
+DECLARE fname, data, status, request, response, errors
+
+{fname = "smp$textreports:qc_request.xml"}
+fname = "smp$textreports:141527_2840request_.xml"
+request = ""
+
+
+FILE OPEN fname
+
+FILE READ fname, data, status
+
+WHILE ( status = EMPTY ) DO
+
+    request = request:data
+
+    FILE READ fname, data, status
+
+ENDWHILE
+
+FILE CLOSE fname
+
+process_transaction(request, response, errors)
+

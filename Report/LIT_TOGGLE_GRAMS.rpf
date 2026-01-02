@@ -1,0 +1,257 @@
+{*****************************************************************************
+*
+* Module Name   : LIT_TOGGLE_GRAMS.RPF
+*
+* Purpose       : Toggle DM_DATA_PACKAGE.USE_GRAMS, Use RMB menu item From 
+*		   DM_DATA_PACKAGE folder, Routine Explorer_toggle
+*
+* Portability   : Not Tested
+*
+* Document Ref. :
+*
+* Re-entrant    : No
+*
+* Specification :
+*
+******************************************************************************
+* Modification History
+*
+* Version   Date        Author           Modify Details
+******************************************************************************
+* 1.0       08/28/2015  G.W. Walters    Created
+*1.1  	    12/10/2015  GW		Update package versions
+*1.2 	    03/30/2016  GW		Cancel linked test for ONL_RAMAN
+*1.3 	    06/08/2016  GW		Fix problem with linked test - Write Trans
+*1.4	    11/7/2016   GW		Fix problem with multiple tests  and add ONL_RAMAN2
+*1.5	    11/21/16    GW  		separate write transactions  
+******************************************************************************}
+
+SET NOTPROTECTED
+SET COMPILE_OPTION DECLARE
+ENABLE WINDOWS
+SET NAME "DEFER/"
+
+JOIN LIBRARY $lib_re_globals
+JOIN LIBRARY $lib_re_context
+JOIN LIBRARY $browse_field
+JOIN LIBRARY $lib_re_interface
+JOIN LIBRARY $lib_re_collection
+JOIN LIBRARY $LIB_UTILS
+JOIN STANDARD_LIBRARY STD_ARRAY
+JOIN STANDARD_LIBRARY STD_ARRAY_SELECT
+JOIN STANDARD_LIBRARY STD_CLIENT
+JOIN STANDARD_LIBRARY STD_PROMPT
+JOIN STANDARD_LIBRARY STD_WORKFLOW
+JOIN STANDARD_LIBRARY STD_MESSAGE
+JOIN STANDARD_LIBRARY STD_STRUCTURE
+
+CONSTANT DMTable = "DM_DATA_PACKAGE"
+CONSTANT ANALYSIS_X = "ONL_RAMAN%"   {1.4}
+
+CONSTANT CANCEL_STATUS = "X"
+
+{**********************          MAIN             *****************************}
+
+
+
+{******************************************************************************}
+
+ROUTINE explorer_toggle (  rmb_object, object, list )
+
+DECLARE   t_name
+
+    lib_re_interface_initialise ()                        
+
+    list.set_first()
+    
+    t_name = list.current.table
+    
+  {  flash_message ( "lit_load_samples" : "sample count  " : SampCount : " " :
+    			 " ", TRUE ) 
+}
+
+    IF t_name = DMTable THEN 
+    toggle_grams(list, t_name)
+    ENDIF
+
+
+
+ENDROUTINE  {explorer_toggle}
+
+{******************************************************************************}
+
+ROUTINE toggle_grams(list, t_name)
+
+
+DECLARE    DMDPID, 
+          DmCount   ,dmarray
+   
+   ARRAY dmarray
+   DMCount = 0
+ 
+    
+    WHILE ( list.current != EMPTY ) DO
+    
+       DMDPID = SELECT DM_DATA_PACKAGE.key_file_name 
+       		IN OBJECT list.current
+        DmCount = DmCount +1
+       	
+       	dmarray[DmCount]=DMDPID
+       
+         list.set_next()
+    ENDWHILE
+    
+    
+    IF DMCount > 0 THEN
+     
+       	   Toggle_status(t_name, dmarray)
+  
+    ELSE
+                 
+          CLIENT_MESSAGE_BOX ( "No Packages Toggled", "Problem with LIT_TOGGLE_GRAMS", MB_ICONINFORMATION )
+      
+    ENDIF
+
+    
+    
+ENDROUTINE  {toggle_grams}
+
+
+{******************************************************************************}
+ROUTINE Toggle_status (VALUE t_name, select_array)
+    
+    DECLARE cnt, loop,ID,  DMCount, toggle, version, versionCnt, versionIndex
+    {1.2 }  , VALUE_NUM, TEST_STATUS, TEST_NUM , testCount
+            , ITEM_ARRAY, ITEM_LOOP, ITEM_COUNT
+
+    cnt = size_of_array(select_array)
+    loop = 0
+    DMCount = 0
+    {TESTCount = 0}
+    versionIndex = 0
+    versionCnt = 1
+    version= ""
+    toggle = FALSE
+    testCount=0
+    ARRAY ITEM_ARRAY
+   
+      
+    IF t_name = "DM_DATA_PACKAGE" THEN 
+     
+    version = SELECT DM_DATA_PACKAGE.DM_DATA_PACKAGE_VERSION WHERE key_file_name = select_array[1]
+    WHILE version <> EMPTY DO
+    versionCnt = versionCnt + 1
+    NEXT DM_DATA_PACKAGE 
+    version = SELECT DM_DATA_PACKAGE.DM_DATA_PACKAGE_VERSION
+    ENDWHILE
+    ITEM_COUNT=1
+    WHILE (versionIndex < versionCnt) DO
+    versionIndex = versionIndex +1
+    loop = 0
+    WHILE ( loop < cnt ) DO
+      	loop = loop +1
+      	If ( versionIndex < 2) THEN
+      	Toggle = SELECT DM_DATA_PACKAGE.USE_GRAMS WHERE 
+              			key_file_name = select_array[loop] AND DM_DATA_PACKAGE_VERSION = versionIndex
+        ENDIF
+              			
+              			
+       
+        
+       START WRITE TRANSACTION "update dm_data_package"
+      	
+      	ID = SELECT DM_DATA_PACKAGE.DM_DATA_PACKAGE_ID 
+      			FOR UPDATE
+      		WHERE DM_DATA_PACKAGE.key_file_name = select_array[loop]  AND DM_DATA_PACKAGE_VERSION = versionIndex
+      		
+      	While ID <> EMPTY DO 
+      	            	
+              		DmCount = DmCount + 1
+            	      { START WRITE TRANSACTION "update dm_data_package"}
+            	       IF (Toggle = TRUE) THEN
+            	       
+ 	           	       ASSIGN DM_DATA_PACKAGE.USE_GRAMS = FALSE
+ 	             		UPDATE DM_DATA_PACKAGE
+ 	                    	{COMMIT}
+ 	                ELSE
+ 	                
+  				ASSIGN DM_DATA_PACKAGE.USE_GRAMS = TRUE
+ 	             		UPDATE DM_DATA_PACKAGE
+ 	                    	{COMMIT}
+ 	                
+ 	                ENDIF
+ 	                
+ { add 1.2 }		IF (Toggle = TRUE)          {was just set to FALSE, so cancel test }
+ 			   
+ 	                  VALUE_NUM = SELECT DM_DATA_ITEM_PROPERTY.VALUE_NUMBER 
+		        	                	WHERE DM_DATA_PACKAGE_ID = ID
+		          WHILE VALUE_NUM <> EMPTY DO
+		        	                    
+		        	IF (VALUE_NUM > 0) THEN  {1.3}
+		                   ITEM_ARRAY[ITEM_COUNT] = VALUE_NUM
+		                   ITEM_COUNT = ITEM_COUNT +1
+		        	                       
+		        	ENDIF {VALUE_NUM > 0}
+		        	NEXT DM_DATA_ITEM_PROPERTY
+		        	VALUE_NUM = SELECT DM_DATA_ITEM_PROPERTY.VALUE_NUMBER 
+		        	                    
+ 	                  ENDWHILE {VALUE_NUM}
+ 	                
+ 	                ENDIF {TOGGLE= TRUE}
+
+ { END - add 1.2}              
+              		NEXT DM_DATA_PACKAGE
+              		ID = Select DM_DATA_PACKAGE.DM_DATA_PACKAGE_ID
+ 
+ 	ENDWHILE {ID <> EMPTY}
+ 	COMMIT {1.5}
+       ENDWHILE  {Loop < Count}     
+       
+      ENDWHILE  {versionIndex < versionCnt}
+      
+    ENDIF { IF = SAMPLE }
+    
+    {1.5  }
+    ItemLoop = 0 
+    ItemCount = size_of_array(ITEM_ARRAY)
+     
+     WHILE (ItemLoop < ItemCount)
+           
+          ItemLoop = ItemLoop + 1
+          VALUE_NUM = ItemArray[ItemLoop]
+          TEST_STATUS = SELECT TEST.STATUS {1.4}
+    	        WHERE SAMPLE = VALUE_NUM and ANALYSIS LIKE ANALYSIS_X 
+    	   	                	
+    	  START WRITE TRANSACTION "update test"
+    	  TEST_NUM = SELECT TEST.TEST_NUMBER 
+    	   	    FOR UPDATE
+    	   	    WHERE SAMPLE = VALUE_NUM and ANALYSIS LIKE ANALYSIS_X and STATUS <> CANCEL_STATUS
+    	   	                	                	
+    	   WHILE TEST_NUM <> EMPTY DO 
+    	   	                	    	  ASSIGN TEST.OLD_STATUS = TEST_STATUS
+    	   	                	    	  ASSIGN TEST.STATUS = CANCEL_STATUS
+    	   	                	    	  
+    	   	      				  UPDATE TEST
+    	   	                            	  TESTCount = TESTCount + 1	                            	  
+    	   	                            	  
+    	   	                    		  NEXT TEST 
+    	   	                    		  TEST_NUM = SELECT TEST.TEST_NUMBER
+    	   ENDWHILE  {TEST_NUM <> EMPTY}
+    	   	                         
+     	   COMMIT  {END 1.4}
+        {end 1.5}   
+           
+       ENDWHILE {ItemLoop < ItemCOunt}	                
+    
+    
+    IF DMCount > 0 THEN
+       
+    	CLIENT_MESSAGE_BOX ( "Toggled ":DMCount:" Packages and ":TESTCount:" Tests", "Toggle Grams", MB_ICONINFORMATION )
+    	
+    ENDIF
+           
+
+ENDROUTINE {toggle_status}
+
+
+{******************************************************************************}

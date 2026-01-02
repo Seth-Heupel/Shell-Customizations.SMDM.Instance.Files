@@ -1,0 +1,358 @@
+{******************************************************************************
+*
+* Module Name   : $TABLE_SAVER_ALL
+*
+* Purpose       : Table save all tables into a sub-directory of smp$datafiles
+*
+* Document Ref. : 
+*
+* Specification :
+*
+* Portability   : Not Checked
+*
+* Re-entrant    : No
+*
+
+*******************************************************************************}
+{	
+* 	Date        Author         	Comments
+*   ----------- --------------	------------------------------------------------
+#1  2019-08-13	 GDBouwman	Added user interface to export dynamic or static, 
+							instead of all
+#2  2020-02-14	 GDBouwman	added tables to exclude
+				
+*******************************************************************************}
+
+SET COMPILE_OPTION DECLARE
+SET NOTPROTECTED
+SET NAME "DEFER/"                      
+ENABLE WINDOWS
+
+JOIN STANDARD_LIBRARY STD_ARRAY
+JOIN STANDARD_LIBRARY STD_DATABASE
+JOIN STANDARD_LIBRARY STD_STRUCTURE
+JOIN STANDARD_LIBRARY STD_TRANSFER
+JOIN STANDARD_LIBRARY STD_WINDOW
+JOIN STANDARD_LIBRARY STD_PROMPT
+
+JOIN LIBRARY $INCREMENT_LOADER
+JOIN LIBRARY $LIB_UTILS
+JOIN LIBRARY $TABLE_LOAD_SAVE_LIB
+
+
+DECLARE CLIENT_DIRECTORY, FILTER
+CLIENT_DIRECTORY = "C:\temp\table_saver_files\"
+FILTER = ""{ Onle need to list the committed tables for dynamic }
+
+CONSTANT INCLUDE_LIST = "C_BATCH_ENTRY,C_BATCH_HEADER,C_ESIG_DATA,C_ESIG_EVENT,C_JOB_HEADER,C_JOB_PARAMETER,C_RESULT,C_SAMPLE,C_SAMPLE_FORMULATION,C_SAMPLE_PARAMETER,C_TEST,C_TEST_PARAMETER"
+
+{ INCLUDE_LIST is a list of tables categorised as dynamic to be included in the 
+  dynamic report or excluded in the static report }
+
+
+DECLARE form, 
+	run_dynamic_button, 
+	run_static_button,
+	close_button
+
+PROMPT OBJECT form
+              CLASS PROMPT_CLASS_FORM
+              WITH ( height = 6 ,
+                     width = 63 ,
+                     column = 8 ,
+                     row = 5    ,
+				 header = "Table Saver All" ,
+				 return_behaviour = FORM_RETURN_STAY ,
+				 button_style = FORM_BUTTON_NONE 
+				)
+
+PROMPT OBJECT run_dynamic_button
+	CLASS "STD_PROMPT_BUTTON"
+	ON LINE form . height - 1
+	FROM 16 TO 26
+	WITH ( caption = "Dynamic"                          ,
+		mouse_click_routine = "dynamic_button_routine" )
+
+PROMPT OBJECT run_static_button
+	CLASS "STD_PROMPT_BUTTON"
+	ON LINE form . height - 1
+	FROM 28 TO 38
+	WITH ( caption = "Static"                          ,
+		mouse_click_routine = "static_button_routine" )
+
+PROMPT OBJECT close_button
+	CLASS "STD_PROMPT_BUTTON"
+	ON LINE form . height - 1
+	FROM 40 TO 50
+	WITH ( caption = "Exit"     ,
+		send_lastkey = "EXIT" )
+
+form . add_display ( "Select Dynamic or Static data to Export", 5 , 1 , 0 )
+form . add_display ( "* Exported data is saved to the server, location reported upon completion", 5 , 2 , 0 )
+
+form . add_prompt ( run_dynamic_button )
+form . add_prompt ( run_static_button )
+form . add_prompt ( close_button )
+
+form . start_prompt ( )
+form . wait_prompt ( )
+form . end_prompt ( )
+
+{******************************************************************************}
+ROUTINE dynamic_button_routine  ( self )
+
+	DECLARE table_nam ,
+	        is_view ,
+	        ok ,
+		   tables,
+		   table_no,
+		   max_table,
+		   save_directory
+
+	ok = TRUE
+	filter = EMPTY
+
+	IF ( GLOBAL ( "PARAM_ACTIVE" ) ) THEN
+
+		PROMPT FOR FILTER
+
+	ENDIF
+
+	IF ( GLOBAL ( "PARAM_ACTIVE" ) ) THEN
+		PROMPT FOR CLIENT_DIRECTORY
+		CLIENT_DIRECTORY = CLIENT_DIRECTORY : "\"
+	ENDIF
+
+
+	save_directory = make_specific_directory ( )
+	get_table_names ( tables )
+	max_table = size_of_array ( tables )
+	table_no = 1
+
+	WHILE ( table_no <= max_table ) AND ok DO
+
+		table_nam = STRIP ( tables [ table_no, 1 ])
+		get_table_details 'table_nam' ,
+		                  "IS_VIEW"   ,
+		                  is_view
+
+		IF NOT ( is_view ) AND 						{ never views }
+			( table_nam != "BLOB_VALUES" ) AND			{ never Blob Values }
+			( table_nam != "IM_IMPORT_LOG" ) AND			{ never Blob Values }
+		  	 ( table_nam != "CLOB_VALUES" ) AND
+		   	( table_nam != "INCREMENTS"  ) AND
+			( table_nam != "SQCWIN_SUBGROUP" ) AND			{ not sqc point tables }
+			( table_nam != "SQCWIN_POINT" ) AND			{ not sqc point tables }
+			( table_nam != "ACTIVITY_LOG" ) AND			{ never Activity log }
+			( table_nam != "PASSWORD" ) AND	
+			( table_nam != "USER_SETTING" ) AND	
+			( table_nam != "WORKFLOW_LINK" ) AND	
+			( table_nam != "WORKFLOW_JOURNAL" ) AND	
+			( INDEX ( table_nam, "SCHEMA") = 0 ) AND		{ not schema tables }
+			( INDEX ( table_nam, "ACCESS") = 0 ) AND		{ never Access logs }
+			( INDEX ( table_nam, "AUDIT") = 0 ) AND			{ not audit tables }
+			( INDEX ( table_nam, "ARCHIVE") = 0 ) AND		{ not archived tables }
+			( INDEX ( INCLUDE_LIST, table_nam ) = 0 ) THEN		{ not active and committed tables }
+			IF ( filter = EMPTY ) OR
+			    ( index ( table_nam, filter) > 0 ) THEN
+
+			ok = table_save_all_save_table ( save_directory, table_nam )
+			ENDIF
+
+		ENDIF
+
+		table_no = table_no + 1
+		
+	ENDWHILE
+	increment_loader_save_to_file ( save_directory : "increment.dump" )
+	IF ( GLOBAL ( "MODE" ) = "INTERACTIVE" ) THEN
+
+		IF CONFIRM_WITH_MESSAGE ( "Transfer to client? You will need the directory " : CLIENT_DIRECTORY ) THEN
+
+			transfer_to_client ( save_directory )
+
+		ENDIF
+	ELSE
+		transfer_to_client ( save_directory )
+	ENDIF
+	
+	FLASH_MESSAGE ( "CSV Files are located here: " :CLIENT_DIRECTORY , FALSE ) 
+
+ENDROUTINE
+
+{******************************************************************************}
+ROUTINE static_button_routine  ( self )
+
+	DECLARE tables ,
+	        table_no ,
+	        max_table ,
+	        table_nam ,
+	        is_view ,
+	        save_directory ,
+	        ok
+
+	ok = TRUE
+	filter = EMPTY
+
+	IF ( GLOBAL ( "PARAM_ACTIVE" ) ) THEN
+
+		PROMPT FOR FILTER
+
+	ENDIF
+
+	IF ( GLOBAL ( "PARAM_ACTIVE" ) ) THEN
+		PROMPT FOR CLIENT_DIRECTORY
+		CLIENT_DIRECTORY = CLIENT_DIRECTORY : "\"
+	ENDIF
+
+
+
+	save_directory = make_specific_directory ( )
+	get_table_names ( tables )
+	max_table = size_of_array ( tables )
+	table_no = 1
+
+	WHILE ( table_no <= max_table ) AND ok DO
+
+		table_nam = STRIP ( tables [ table_no, 1 ])
+		get_table_details 'table_nam' ,
+		                  "IS_VIEW"   ,
+		                  is_view
+
+{ #2 added schema, sqcwin, im_import_log }
+		IF NOT ( is_view ) AND 						{ never views }
+			( table_nam != "BLOB_VALUES" ) AND			{ never Blob Values }
+			( table_nam != "IM_IMPORT_LOG" ) AND			{ never Blob Values }
+		  	 ( table_nam != "CLOB_VALUES" ) AND
+		   	( table_nam != "INCREMENTS"  ) AND
+			( table_nam != "SQCWIN_SUBGROUP" ) AND			{ not sqc point tables }
+			( table_nam != "SQCWIN_POINT" ) AND			{ not sqc point tables }
+			( table_nam != "ACTIVITY_LOG" ) AND			{ never Activity log }
+			( table_nam != "PASSWORD" ) AND	
+			( table_nam != "USER_SETTING" ) AND	
+			( table_nam != "WORKFLOW_LINK" ) AND	
+			( table_nam != "WORKFLOW_JOURNAL" ) AND	
+			( INDEX ( table_nam, "SCHEMA") = 0 ) AND		{ not schema tables }
+			( INDEX ( table_nam, "ACCESS") = 0 ) AND		{ never Access logs }
+			( INDEX ( table_nam, "AUDIT") = 0 ) AND			{ not audit tables }
+			( INDEX ( table_nam, "ARCHIVE") = 0 ) AND		{ not archived tables }
+			( INDEX ( INCLUDE_LIST, table_nam ) = 0 ) THEN		{ not active and committed tables }
+			IF ( filter = EMPTY ) OR
+			    ( index ( table_nam, filter) > 0 ) THEN
+
+			ok = table_save_all_save_table ( save_directory, table_nam )
+			ENDIF
+
+		ENDIF
+
+		table_no = table_no + 1
+		
+	ENDWHILE
+
+	increment_loader_save_to_file ( save_directory : "increment.dump" )
+	IF ( GLOBAL ( "MODE" ) = "INTERACTIVE" ) THEN
+
+		IF CONFIRM_WITH_MESSAGE ( "Transfer to client? You will need the directory " : CLIENT_DIRECTORY) THEN
+
+			transfer_to_client ( save_directory )
+
+		ENDIF
+	ELSE
+		transfer_to_client ( save_directory )
+	ENDIF
+	
+	FLASH_MESSAGE ( "CSV Files are located here: ": CLIENT_DIRECTORY , FALSE ) 
+
+ENDROUTINE
+
+{******************************************************************************}
+
+ROUTINE table_save_all_save_table ( VALUE save_directory ,
+                                    VALUE table_nam      )
+
+	DECLARE list_of_fields  ,
+	        selection_array ,
+	        file_name       ,
+	        return_message  ,
+	        ok
+
+	ARRAY list_of_fields ARRAYSIZE ( 0 )
+
+	get_field_names_without_aliases ( table_nam, list_of_fields )
+
+	table_load_save_lib_filter_fields ( table_nam, list_of_fields )
+
+	ARRAY selection_array
+
+	table_load_save_lib_default_select ( table_nam, selection_array )
+
+	file_name = save_directory : strip ( table_nam ) : ".csv"
+
+	ok = output_csv_file( file_name       ,
+	                      table_nam       ,
+	                      list_of_fields  ,
+	                      selection_array ,
+	                      FALSE           ,
+	                      return_message  )
+
+	IF NOT ok AND ( GLOBAL ( "MODE" ) = "INTERACTIVE" ) THEN
+		FLASH_MESSAGE ( return_message, TRUE )
+	ENDIF
+
+	RETURN ( ok )
+
+ENDROUTINE
+{******************************************************************************}
+
+ROUTINE make_specific_directory
+
+	DECLARE new_directory,suffix
+	suffix = "-TABLE_SAVER_ALL"
+	SET DATE FORMAT "YYYYMZDZ-H24MISS"
+
+	IF (FILTER<>EMPTY) THEN
+		suffix = "-":FILTER
+	ENDIF
+
+	new_directory = lib_utils_logical_to_string ( "SMP$DATAFILES" ) : "\" : NOW : suffix
+
+	RESTORE DATE FORMAT
+
+	SPAWN "mkdir " : ASCII (34) : new_directory : ASCII (34) QUIETLY
+
+	RETURN ( new_directory : "\" )
+ENDROUTINE
+
+{******************************************************************************}
+
+ROUTINE transfer_to_client ( VALUE save_directory )
+
+	DECLARE files_array,
+	        check_ok,
+	        count,
+	        file_name,
+	        client_file_name
+
+	ARRAY files_array
+
+	FILE FIND save_directory : "*.csv", files_array, check_ok
+
+	count = 1
+
+	WHILE ( count <= size_of_array ( files_array )) DO
+
+		file_name = files_array [ count ]
+
+		client_file_name = file_name # save_directory
+
+		window_set_status ( client_file_name )
+
+		client_file_name = CLIENT_DIRECTORY : client_file_name
+
+		transfer_binary_from_server ( file_name , client_file_name )
+
+		count = count + 1
+
+	ENDWHILE
+
+ENDROUTINE

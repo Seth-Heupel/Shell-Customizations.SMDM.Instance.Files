@@ -1,0 +1,65 @@
+{*******************************************************************************
+*
+* Module Name   : $HELP_DATAMANAGER
+*
+* Purpose       : General report to place data manager help code.
+*
+* Document Ref. : N/a
+*
+*******************************************************************************}
+
+SET NOTPROTECTED
+SET NAME "DEFER/"
+
+SET COMPILE_OPTION DECLARE
+ENABLE WINDOWS
+
+JOIN STANDARD_LIBRARY STD_CLIENT
+JOIN STANDARD_LIBRARY STD_PROMPT
+
+JOIN LIBRARY $LIB_UTILS
+
+{******************************************************************************}
+
+
+{*******************************************************************************
+*                             M A I N   C O D E
+*******************************************************************************}
+
+help_data_manager_chm ("")
+
+{*******************************************************************************
+*                        G L O B A L    R O U T I N E S
+*******************************************************************************}
+
+{*******************************************************************************
+*                             R O U T I N E S
+*******************************************************************************}
+
+ROUTINE help_data_manager_chm( VALUE option )
+
+{ Calls the data manager help file in the resource folder.
+*
+* Parameters   : option - menu procedure ( not used within routine )
+* Return Value : N/a
+*
+*******************************************************************************}
+
+	DECLARE errors,
+	        client_name
+
+	errors = client_get_resource_name ( "Help", client_name )
+
+	IF errors = EMPTY THEN
+
+		client_name = client_name : "\DM_Help.chm"
+		prompt_help_gui_custom ( client_name , "")
+
+	ENDIF
+
+ENDROUTINE
+
+
+{******************************************************************************}
+{******************************************************************************}
+{******************************************************************************}
