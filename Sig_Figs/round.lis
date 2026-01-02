@@ -1,0 +1,84 @@
+SampleManager version 12.1 SP1                            4-SEP-2020 07:16:45.04
+C:\Thermo\SampleManager\Server\SMDM\sig_figs\round.lis                Page     1
+
+     1: JOIN LIBRARY $LIB_FILTR
+     2: 
+     3: ROUTINE sig_figs_filter ( VALUE sig_figs,        { Number of Sig Figs       }
+     4:                           VALUE rounding_base,   { Unit Value for Rounding  }
+     5:                           VALUE decimal_places,  { Number of Decimal Places }
+     6:                           VALUE textual_result,  { Input Textual Result     }
+     7:                           VALUE numeric_result ) { Input Numeric Result     }
+     8: 
+     9:     DECLARE filtered_result                 { Output Result After Filtering }
+    10:     DECLARE offset_num, offset              { Local Calculation Variables   }
+    11: 
+    12:     { The method used to provide filtering in this routine uses the TRUNC()   }
+    13:     { function to remove the significant part of the number. It therefore     }
+    14:     { will not work when the number of significant figures is greater than 10 }
+    15: 
+    16:     IF ( sig_figs = 0 ) OR ( rounding_base = 0 ) OR ( sig_figs > 10 )
+    17: 
+    18:         filtered_result = ERROR
+    19: 
+    20:     ELSEIF (sig_figs < 0) THEN
+    21: 
+    22:         filtered_result = textual_result
+    23: 
+    24:     ELSE
+    25:         { Create an offset }
+    26:         offset = 10 ^ ( round( exponent ( numeric_result )) - sig_figs + 1 )
+    27: 
+    28:         { Divide by the offset to ensure that all digits to the left of the decimal }
+    29:         { point are significant }
+    30:         offset_num = numeric_result / offset / rounding_base
+    31: 
+    32:         { Separate the decimal places }
+    33:         places = offset_num - trunc ( offset_num )
+    34:         offset_num = trunc ( offset_num )
+    35: 
+    36:         IF offset_num >= 0 THEN
+    37:             IF places > 0.5 THEN
+    38:                 offset_num = offset_num + 1
+    39:             ELSEIF ( places = 0.5 )
+    40:                AND ( offset_num / 2 <> TRUNC ( offset_num / 2 )) THEN
+    41:                 offset_num = offset_num + 1
+    42:             ENDIF
+    43:         ELSE
+    44:             IF places < -0.5 THEN
+    45:                 offset_num = offset_num - 1
+    46:             ELSEIF ( places = -0.5 )
+    47:                AND ( offset_num / 2 <> TRUNC ( offset_num / 2 )) THEN
+    48:                 offset_num = offset_num - 1
+    49:             ENDIF
+    50:         ENDIF
+    51: 
+    52:         { Multiply by the offset to restore the number }
+    53:         filtered_result = offset_num * rounding_base * offset
+    54: 
+    55:         set_best_format ( filtered_result, sig_figs )
+    56: 
+    57:         gt_lt_sign = get_result_prefix( textual_result )
+SampleManager version 12.1 SP1                            4-SEP-2020 07:16:45.04
+C:\Thermo\SampleManager\Server\SMDM\sig_figs\round.lis                Page     2
+
+    58: 
+    59:         filtered_result = gt_lt_sign : filtered_result
+    60: 
+    61:     ENDIF
+    62: 
+    63:     RETURN ( filtered_result )
+    64: 
+    65: ENDROUTINE { sig_figs_filter }
+
+Format uses 10 variable(s), named as follows:
+
+        DECIMALPLACES
+        FILTEREDRESULT
+        GTLTSIGN
+        NUMERICRESULT
+        OFFSET
+        OFFSETNUM
+        PLACES
+        ROUNDINGBASE
+        SIGFIGS
+        TEXTUALRESULT
